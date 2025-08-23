@@ -1,0 +1,62 @@
+import { Task, AttentionValue, TruthValue, SemanticAtom } from './models';
+import { UUID } from './types';
+import { WorldModel } from './world-model';
+
+export interface IAttentionPolicy {
+  calculate_initial(task: Task): AttentionValue;
+  calculate_derived(task_a: Task, task_b: Task, schema_id: UUID): AttentionValue;
+  decay(task: Task, elapsed: number): AttentionValue;
+}
+
+export interface ITruthPolicy {
+  revision(belief_a: Task, belief_b: Task): TruthValue;
+  derivation(premise_a: Task, premise_b: Task, schema_id: UUID): TruthValue;
+}
+
+export interface IResonanceStrategy {
+  find_context(
+    focus: Task,
+    world_model: WorldModel,
+    k: number,
+    scope_bindings?: Record<string, string>
+  ): Task[];
+}
+
+export interface ICognitiveSchema {
+  id: UUID;
+  get_trigger_pattern(): string;
+  apply(
+    task_a: Task,
+    task_b: Task,
+    truth_policy: ITruthPolicy,
+    world_model: WorldModel
+  ): Task[];
+
+  apply_with_bindings(
+    task_a: Task,
+    task_b: Task,
+    truth_policy: ITruthPolicy,
+    scope_bindings: Record<string, string>,
+    world_model: WorldModel
+  ): Task[];
+}
+
+export interface ProcedureHandler {
+  name(): string;
+  can_handle(content: string): boolean;
+  execute(
+    content: string,
+    bindings: Record<string, string>,
+    world_model: WorldModel
+  ): Task[];
+}
+
+export interface VectorDB {
+  add(embedding: Vector, atom_id: UUID): void;
+  find_nearest(embedding: Vector, k: number): UUID[];
+}
+
+export interface PatternMatcher {
+  add(pattern: string, schema_id: UUID): void;
+  match(content_a: string, content_b: string): UUID[];
+}
