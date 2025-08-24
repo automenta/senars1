@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { generate_embedding } from './core/utils';
 import { WorldModel } from './core/world-model';
-import { DefaultAttentionPolicy, DefaultTruthPolicy, DefaultResonanceStrategy, LLMHandler, LLMConfig } from './core/implementations';
+import { DefaultAttentionPolicy, DefaultTruthPolicy, DefaultResonanceStrategy, LLMHandler } from './core/implementations';
 import { Task, SemanticAtom } from './core/models';
 import { TaskType } from './core/types';
 import { ProcedureHandler } from './core/interfaces';
@@ -12,6 +12,7 @@ import { AbductionSchema } from './core/schemas/abduction';
 import { InductionSchema } from './core/schemas/induction';
 import { seed_data } from './core/seed';
 import { CognitiveEngine } from './core/engine'; // Import the new engine
+import { loadConfig, Config, LLMConfig } from './core/config';
 
 export class App {
   world_model: WorldModel;
@@ -22,6 +23,7 @@ export class App {
   private resonance_strategy: DefaultResonanceStrategy;
   private procedure_handlers: Record<string, ProcedureHandler>;
   private engine: CognitiveEngine; // Add the engine instance
+  private config: Config;
 
   // GUI can access these via getters
   public get last_scope_bindings(): Record<string, string> | undefined {
@@ -31,7 +33,8 @@ export class App {
     return this.engine.last_scope_task;
   }
 
-  constructor(seedData: boolean = true) {
+  private constructor(config: Config, seedData: boolean = true) {
+    this.config = config;
     this.attention_policy = new DefaultAttentionPolicy();
     this.truth_policy = new DefaultTruthPolicy();
     this.resonance_strategy = new DefaultResonanceStrategy();
@@ -40,10 +43,7 @@ export class App {
     this.procedure_handlers = {};
     this.schema_registry = new SchemaRegistry(this.world_model.schema_index);
 
-    // Placeholder for file-based config loading in Node.js
-    // const fileConfig = this.load_config_from_file_system();
-
-    const llmHandler = new LLMHandler(); // Pass fileConfig here
+    const llmHandler = new LLMHandler(this.config.llm);
     this.procedure_handlers[llmHandler.name()] = llmHandler;
 
     this.engine = new CognitiveEngine(
@@ -69,7 +69,13 @@ export class App {
     }
   }
 
+  public static async create(seedData: boolean = true): Promise<App> {
+    const config = await loadConfig();
+    return new App(config, seedData);
+  }
+
   public update_llm_config(config: LLMConfig) {
+    this.config.llm = config;
     const llmHandler = this.procedure_handlers['llm'] as LLMHandler;
     if (llmHandler) {
       llmHandler.update_config(config);

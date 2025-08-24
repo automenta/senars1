@@ -160,44 +160,54 @@ export class InMemoryPatternMatcher implements PatternMatcher {
 
         // Dual premise matching
         for (const [patternKey, schema_ids] of this.dual_premise_patterns.entries()) {
-            const pattern = JSON.parse(patternKey) as [string, string];
-            const patternA = parseSExpression(pattern[0]);
-            const patternB = parseSExpression(pattern[1]);
+            try {
+                const pattern = JSON.parse(patternKey) as [string, string];
+                const patternA = parseSExpression(pattern[0]);
+                const patternB = parseSExpression(pattern[1]);
 
-            // Try matching (A, B) with (content_a, content_b)
-            const bindings1: Record<string, string> = {};
-            if (matchSExpressionPattern(patternA, contentA_SExpr, bindings1) && matchSExpressionPattern(patternB, contentB_SExpr, bindings1)) {
-                for (const schema_id of schema_ids) {
-                    results.push({ schema_id, bindings: { ...bindings1 } });
+                // Try matching (A, B) with (content_a, content_b)
+                const bindings1: Record<string, string> = {};
+                if (matchSExpressionPattern(patternA, contentA_SExpr, bindings1) && matchSExpressionPattern(patternB, contentB_SExpr, bindings1)) {
+                    for (const schema_id of schema_ids) {
+                        results.push({ schema_id, bindings: { ...bindings1 } });
+                    }
                 }
-            }
 
-            // Try matching (A, B) with (content_b, content_a)
-            const bindings2: Record<string, string> = {};
-            if (matchSExpressionPattern(patternA, contentB_SExpr, bindings2) && matchSExpressionPattern(patternB, contentA_SExpr, bindings2)) {
-                for (const schema_id of schema_ids) {
-                    results.push({ schema_id, bindings: { ...bindings2 } });
+                // Try matching (A, B) with (content_b, content_a)
+                const bindings2: Record<string, string> = {};
+                if (matchSExpressionPattern(patternA, contentB_SExpr, bindings2) && matchSExpressionPattern(patternB, contentA_SExpr, bindings2)) {
+                    for (const schema_id of schema_ids) {
+                        results.push({ schema_id, bindings: { ...bindings2 } });
+                    }
                 }
+            } catch (e) {
+                console.warn(`Skipping invalid dual-premise schema pattern: ${patternKey}`, e);
+                continue;
             }
         }
 
         // Single premise matching (optional, if schemas can be triggered by one task)
         for (const [patternKey, schema_ids] of this.single_premise_patterns.entries()) {
-            const pattern = JSON.parse(patternKey) as string;
-            const patternSExpr = parseSExpression(pattern);
+            try {
+                const pattern = JSON.parse(patternKey) as string;
+                const patternSExpr = parseSExpression(pattern);
 
-            const bindingsA: Record<string, string> = {};
-            if (matchSExpressionPattern(patternSExpr, contentA_SExpr, bindingsA)) {
-                 for (const schema_id of schema_ids) {
-                    results.push({ schema_id, bindings: { ...bindingsA } });
+                const bindingsA: Record<string, string> = {};
+                if (matchSExpressionPattern(patternSExpr, contentA_SExpr, bindingsA)) {
+                    for (const schema_id of schema_ids) {
+                        results.push({ schema_id, bindings: { ...bindingsA } });
+                    }
                 }
-            }
 
-            const bindingsB: Record<string, string> = {};
-            if (matchSExpressionPattern(patternSExpr, contentB_SExpr, bindingsB)) {
-                 for (const schema_id of schema_ids) {
-                    results.push({ schema_id, bindings: { ...bindingsB } });
+                const bindingsB: Record<string, string> = {};
+                if (matchSExpressionPattern(patternSExpr, contentB_SExpr, bindingsB)) {
+                    for (const schema_id of schema_ids) {
+                        results.push({ schema_id, bindings: { ...bindingsB } });
+                    }
                 }
+            } catch (e) {
+                console.warn(`Skipping invalid single-premise schema pattern: ${patternKey}`, e);
+                continue;
             }
         }
 
@@ -313,29 +323,31 @@ export class DefaultResonanceStrategy implements IResonanceStrategy {
   }
 }
 
-export interface LLMConfig {
-    apiKey: string;
-    modelName: string;
-}
+import { LLMConfig } from './config';
 
 export class LLMHandler implements ProcedureHandler {
-  private config?: LLMConfig;
+  private config: LLMConfig;
   private llm?: ChatOpenAI;
 
-  constructor(config?: LLMConfig) {
-    if (config) {
-      this.update_config(config);
-    }
+  constructor(config: LLMConfig) {
+    this.config = config;
+    this.update_config(config);
   }
 
   public update_config(config: LLMConfig) {
     this.config = config;
-    this.llm = new ChatOpenAI({
-        apiKey: this.config.apiKey,
-        modelName: this.config.modelName,
-        temperature: 0.7,
-    });
-    console.log("LLMHandler configured with new settings.");
+    if (this.config.apiKey && this.config.modelName) {
+        this.llm = new ChatOpenAI({
+            apiKey: this.config.apiKey,
+            modelName: this.config.modelName,
+            temperature: 0.7,
+            maxTokens: this.config.max_tokens,
+        });
+        console.log("LLMHandler configured with new settings.");
+    } else {
+        this.llm = undefined;
+        console.warn("LLMHandler is not fully configured. API key or model name is missing.");
+    }
   }
 
   name(): string {

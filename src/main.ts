@@ -2,8 +2,8 @@ import './style.css';
 import { Gui } from './gui';
 import { App } from './app';
 
-document.addEventListener('DOMContentLoaded', () => {
-  const app = new App();
+document.addEventListener('DOMContentLoaded', async () => {
+  const app = await App.create();
   const gui = new Gui(app, app.world_model, app.agenda, app.schema_registry);
   gui.init();
 

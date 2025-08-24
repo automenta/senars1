@@ -395,7 +395,7 @@ export class Gui {
   }
 
   private get_completed_thoughts(): GuiTask[] {
-    return Array.from(this.world_model.tasks.values())
+    return Object.values(this.world_model.tasks)
       .filter(task => task.type === TaskType.BELIEF)
       .map(t => this.map_task_to_gui_task(t));
   }

@@ -7,9 +7,9 @@ import { DeductionSchema } from '../schemas';
 describe('App', () => {
   let app: App;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Reset the app before each test to ensure isolation, and disable seeding
-    app = new App(false);
+    app = await App.create(false);
   });
 
   describe('User Verification', () => {
