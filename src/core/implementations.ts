@@ -1,5 +1,6 @@
 import { VectorDB, PatternMatcher, IAttentionPolicy, ITruthPolicy, IResonanceStrategy, ICognitiveSchema, ProcedureHandler } from './interfaces';
 import { UUID, Vector, TaskType } from './types';
+import { generate_embedding } from './utils';
 import { Task, AttentionValue, TruthValue, SemanticAtom, DerivationStamp } from './models';
 import { WorldModel } from './world-model';
 import { parseSExpression, sExpressionToString, SExpression } from './s-expression';
@@ -247,10 +248,11 @@ export class LLMHandler implements ProcedureHandler {
     const llm_result_text = `Simulated LLM response for: ${query}`;
     const llm_result_confidence = 0.8;
 
+    const atom_content = `(search_result "${query}" "${llm_result_text}")`;
     const atom: SemanticAtom = {
       id: generate_uuid(),
-      content: `(search_result "${query}" "${llm_result_text}")`,
-      embedding: [], // Placeholder
+      content: atom_content,
+      embedding: generate_embedding(atom_content),
     };
     world_model.add_atom(atom);
 

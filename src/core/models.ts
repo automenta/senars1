@@ -22,6 +22,7 @@ export interface DerivationStamp {
   parent_ids: UUID[];
   schema_id: UUID;
   scope_bindings?: Record<string, string>;
+    path?: string[]; // Human-readable derivation path
 }
 
 export interface Task {
@@ -31,4 +32,5 @@ export interface Task {
   truth?: TruthValue;
   attention: AttentionValue;
   stamp: DerivationStamp;
+    verified?: boolean;
 }

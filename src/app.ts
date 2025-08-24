@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { generate_embedding } from './core/utils';
 import { WorldModel } from './core/world-model';
 import { DefaultAttentionPolicy, DefaultTruthPolicy, DefaultResonanceStrategy, LLMHandler } from './core/implementations';
 import { Task, SemanticAtom } from './core/models';
@@ -23,10 +24,12 @@ export class App {
   private procedure_handlers: Record<string, ProcedureHandler>;
   private pinned_tasks: Set<string>;
   public last_scope_bindings: Record<string, string> | undefined;
+  public last_scope_task: Task | undefined;
 
-  constructor() {
+  constructor(seedData: boolean = true) {
     this.pinned_tasks = new Set();
     this.last_scope_bindings = undefined;
+    this.last_scope_task = undefined;
     this.attention_policy = new DefaultAttentionPolicy();
     this.truth_policy = new DefaultTruthPolicy();
     this.resonance_strategy = new DefaultResonanceStrategy();
@@ -47,7 +50,9 @@ export class App {
     const inductionSchema = new InductionSchema();
     this.schema_registry.register(inductionSchema);
 
-    seed_data(this.world_model, this.agenda, this.attention_policy);
+    if (seedData) {
+      seed_data(this.world_model, this.agenda, this.attention_policy);
+    }
   }
 
   public async tick() {
@@ -56,8 +61,13 @@ export class App {
     const task_a = await this.agenda.pop();
     const context = this.world_model.find_resonant(task_a, 10);
     this.last_scope_bindings = undefined;
+    this.last_scope_task = undefined;
+
     if (context.length > 0) {
       this.last_scope_bindings = resolveScopeBindings(task_a, context, this.world_model);
+      if (this.last_scope_bindings) {
+        this.last_scope_task = task_a;
+      }
     }
     const scope_bindings = this.last_scope_bindings;
 
@@ -79,12 +89,17 @@ export class App {
       this.procedure_handlers,
       scope_bindings
     );
+
+    const parent_content = this.world_model.get_atom(task.atom_id).content;
+    const new_path = (task.stamp.path || []).concat([parent_content]);
+
     for (const result_task of results) {
       result_task.stamp = {
         timestamp: Date.now() / 1000,
         parent_ids: [task.id],
         schema_id: task.stamp.schema_id,
         scope_bindings: scope_bindings,
+        path: new_path,
       };
       this.agenda.push(result_task);
     }
@@ -127,11 +142,17 @@ export class App {
     new_task.attention = this.attention_policy.calculate_derived(
       parent_a, parent_b, schema_id
     );
+
+    const parent_a_content = this.world_model.get_atom(parent_a.atom_id).content;
+    const parent_b_content = this.world_model.get_atom(parent_b.atom_id).content;
+    const new_path = (parent_a.stamp.path || [parent_a_content]).concat([parent_b_content]);
+
     new_task.stamp = {
       timestamp: Date.now() / 1000,
       parent_ids: [parent_a.id, parent_b.id],
       schema_id: schema_id,
       scope_bindings: scope_bindings,
+      path: new_path,
     };
     await this.agenda.push(new_task);
   }
@@ -140,7 +161,7 @@ export class App {
     const atom: SemanticAtom = {
       id: uuidv4(),
       content: content,
-      embedding: [],
+      embedding: generate_embedding(content),
     };
     this.world_model.add_atom(atom);
 
@@ -211,6 +232,17 @@ export class App {
     const task = this.world_model.tasks[taskId];
     if (task) {
       this.world_model.remove_task(taskId);
+    }
+  }
+
+  public verify_belief(taskId: string) {
+    const task = this.world_model.tasks[taskId];
+    if (task && task.type === TaskType.BELIEF) {
+      task.verified = true;
+      // Optionally, boost confidence of verified beliefs
+      if (task.truth) {
+        task.truth.confidence = Math.min(1.0, task.truth.confidence + 0.1);
+      }
     }
   }
 }

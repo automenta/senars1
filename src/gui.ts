@@ -6,6 +6,7 @@ import { WorldModel } from './core/world-model';
 import { Agenda } from './core/agenda';
 import { SchemaRegistry } from './core/schema-registry';
 import { is_procedure_task, extract_handler_name, extract_param } from './core/procedure';
+import { parseScopeExpression, substituteInContent } from './core/scope';
 
 export interface GuiTask extends Task {
   content: string;
@@ -115,15 +116,36 @@ export class Gui {
 
   private render_scope_debugger() {
     const bindings = this.app.last_scope_bindings;
-    if (bindings && Object.keys(bindings).length > 0) {
-      this.scopeDebugger.innerHTML = `
-        <div class="scope-card">
-          <h4>Last Resolved Scope</h4>
-          <ul>
-            ${Object.entries(bindings).map(([key, value]) => `<li><strong>${key}:</strong> ${value}</li>`).join('')}
-          </ul>
-        </div>
-      `;
+    const task = this.app.last_scope_task;
+
+    if (bindings && task) {
+      try {
+        const atom = this.world_model.get_atom(task.atom_id);
+        const parsedScope = parseScopeExpression(atom.content);
+
+        const requiredVars = new Set(parsedScope.variables.filter(v => v.required).map(v => v.name));
+        const boundVars = new Set(Object.keys(bindings));
+        const isFullyResolved = [...requiredVars].every(v => boundVars.has(v));
+
+        const template = parsedScope.bodies.join(', ');
+        const result = substituteInContent(template, bindings);
+
+        this.scopeDebugger.innerHTML = `
+          <div class="scope-card">
+            <h4>🌐 Thought Template: ${atom.content}</h4>
+            <p><strong>Template:</strong> ${template}</p>
+            <p><strong>Bindings:</strong></p>
+            <ul>
+              ${Object.entries(bindings).map(([key, value]) => `<li>• <strong>${key}</strong> = ${value}</li>`).join('')}
+            </ul>
+            <p><strong>Status:</strong> ${isFullyResolved ? '✅ Fully resolved' : '⚠️ Partially resolved'}</p>
+            <p><strong>Result:</strong> ${result}</p>
+          </div>
+        `;
+      } catch (e) {
+        console.error("Error rendering scope debugger:", e);
+        this.scopeDebugger.innerHTML = `<p>Error rendering scope.</p>`;
+      }
     } else {
       this.scopeDebugger.innerHTML = `<p>No active scope resolution.</p>`;
     }
@@ -152,6 +174,8 @@ export class Gui {
         await this.app.question_belief(taskId);
       } else if (target.classList.contains('forget-btn')) {
         await this.app.forget_belief(taskId);
+      } else if (target.classList.contains('verify-btn')) {
+        await this.app.verify_belief(taskId);
       }
       await this.render();
     });
@@ -221,6 +245,10 @@ export class Gui {
 
   private map_task_to_gui_task(task: Task): GuiTask {
     const atom = this.world_model.get_atom(task.atom_id);
+    const path_history = (task.stamp.path && task.stamp.path.length > 0)
+      ? [...task.stamp.path, atom.content].join(' → ')
+      : atom.content;
+
     const guiTask: GuiTask = {
       ...task,
       content: atom ? atom.content : 'Atom not found',
@@ -237,56 +265,26 @@ export class Gui {
             }
           }).join(', ')}`
         : undefined,
-      path_history: task.stamp.parent_ids.length > 0
-        ? `Path: ${task.stamp.parent_ids.map(id => {
-            try {
-              return this.world_model.get_atom(this.world_model.get_task(id).atom_id).content;
-            } catch (e) {
-              console.error(`Error fetching path history task atom content for ID ${id}:`, e);
-              return 'Unknown';
-            }
-          }).join(' → ')}`
-        : undefined,
+      path_history: path_history,
       source: task.stamp.schema_id
-        ? (this.schema_registry.get(task.stamp.schema_id)?.get_trigger_pattern() || `Schema ID: ${task.stamp.schema_id}`)
-        : undefined,
+        ? (this.schema_registry.get(task.stamp.schema_id)?.constructor.name || `Schema ID: ${task.stamp.schema_id}`)
+        : 'N/A',
       completed_ago: task.type === TaskType.BELIEF ? this.get_time_ago(task.stamp.timestamp) : undefined,
-      verification_status: task.type === TaskType.BELIEF ? 'Unverified' : undefined,
+      verification_status: task.verified ? 'Verified by user' : 'Unverified',
       knowledge_retention: task.type === TaskType.BELIEF ? this.get_retention_time(task.attention.durability) : undefined,
     };
 
     if (is_procedure_task(task, this.world_model)) {
       const handler_name = extract_handler_name(atom.content);
       const query = extract_param(atom.content, "query");
-      guiTask.next_step = `Procedure: ${handler_name}(${query || '...'})`;
+      guiTask.next_step = `Running Procedure: ${handler_name}(${query || '...'})`;
     } else if (task.type === TaskType.GOAL) {
-      guiTask.next_step = "Finding relevant beliefs and schemas...";
+      guiTask.next_step = "Actively seeking context and applicable schemas.";
     } else if (task.type === TaskType.BELIEF) {
-      guiTask.next_step = "Integrating into world model, finding resonant tasks...";
+      guiTask.next_step = "Being considered for integration into knowledge base.";
     }
-
-    guiTask.path_history = this.build_path_history(task);
 
     return guiTask;
-  }
-
-  private build_path_history(task: Task, depth = 0): string {
-    if (depth > 3 || task.stamp.parent_ids.length === 0) {
-      const atom = this.world_model.get_atom(task.atom_id);
-      return atom.content;
-    }
-
-    const parent_id = task.stamp.parent_ids[0];
-    try {
-      const parent_task = this.world_model.get_task(parent_id);
-      const parent_path = this.build_path_history(parent_task, depth + 1);
-      const current_atom = this.world_model.get_atom(task.atom_id);
-      return `${parent_path} → ${current_atom.content}`;
-    } catch (e) {
-      console.error(`Could not trace back path history for task ${task.id}`, e);
-      const atom = this.world_model.get_atom(task.atom_id);
-      return atom.content;
-    }
   }
 
   private async get_active_thoughts(): Promise<GuiTask[]> {
@@ -301,18 +299,24 @@ export class Gui {
   }
 
   private async get_cognitive_metrics() {
-    const activeTasks = await this.agenda.size();
+    const activeTasks = await this.agenda.get_all_tasks();
+    const activeTaskCount = activeTasks.length;
     const completedBeliefs = Array.from(this.world_model.tasks.values()).filter(task => task.type === TaskType.BELIEF).length;
-    const totalTasks = activeTasks + completedBeliefs;
-    const focusLevel = totalTasks > 0 ? ((activeTasks / totalTasks) * 100).toFixed(0) : 0;
+    const totalTasks = activeTaskCount + completedBeliefs;
+    const focusLevel = totalTasks > 0 ? ((activeTaskCount / totalTasks) * 100).toFixed(0) : 0;
     const memoryItems = completedBeliefs;
-    const energyLevel = 78;
+
+    let energyLevel = 0;
+    if (activeTaskCount > 0) {
+      const totalPriority = activeTasks.reduce((sum, task) => sum + task.attention.priority, 0);
+      energyLevel = (totalPriority / activeTaskCount) * 100;
+    }
 
     return {
       focus: `${focusLevel}%`,
-      active_thoughts: activeTasks,
+      active_thoughts: activeTaskCount,
       memory: `${memoryItems} items`,
-      energy: `${energyLevel}%`,
+      energy: `${energyLevel.toFixed(0)}%`,
     };
   }
 
@@ -376,9 +380,13 @@ export class Gui {
     }
 
     if (isCompleted) {
+        const verifyButton = !task.verified
+            ? `<button class="action-btn verify-btn" data-task-id="${task.id}">✔️ Verify</button>`
+            : '';
         details.push(`<div class="knowledge-actions">
             <button class="action-btn star-btn" data-task-id="${task.id}">⭐ Star</button>
             <button class="action-btn question-btn" data-task-id="${task.id}">❓ Question</button>
+            ${verifyButton}
             <button class="action-btn forget-btn" data-task-id="${task.id}">🗑️ Forget</button>
           </div>`);
     }

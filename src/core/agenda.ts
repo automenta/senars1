@@ -100,7 +100,11 @@ export class Agenda {
   async get_all_tasks(): Promise<Task[]> {
     const release = await this.mutex.acquire();
     try {
-      return this.queue.toArray();
+      // The 'ts-priority-queue' library does not have a public 'toArray' method.
+      // We access the internal heap array for read-only purposes.
+      // This is a potential point of failure if the library changes its internal structure.
+      const internal_heap = (this.queue as any).heap;
+      return internal_heap ? [...internal_heap] : [];
     } finally {
       release();
     }
