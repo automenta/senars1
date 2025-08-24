@@ -88,4 +88,34 @@ describe('WorldModel', () => {
     expect(retrieved).toBeDefined();
     expect(retrieved!.truth?.frequency).toBe(0.6); // From MockTruthPolicy
   });
+
+  it('should remove schema from schema_index when the last associated task is removed', () => {
+    // 1. Create a schema atom and a task for it
+    const schemaPattern = '(implies $1 $2)';
+    const schemaAtom: SemanticAtom = {
+      id: uuidv4(),
+      content: schemaPattern,
+      embedding: [0.5],
+    };
+    worldModel.add_atom(schemaAtom);
+
+    const schemaTask: Task = {
+      id: uuidv4(),
+      atom_id: schemaAtom.id,
+      type: TaskType.BELIEF,
+      attention: { priority: 0.9, durability: 0.9 },
+      stamp: { timestamp: Date.now() / 1000, parent_ids: [], schema_id: '' },
+    };
+    worldModel.add_task(schemaTask);
+
+    // 2. Verify the schema is in the schema_index using the new 'has' method
+    expect(worldModel.schema_index.has(schemaPattern, schemaAtom.id)).toBe(true);
+
+    // 3. Remove the task
+    worldModel.remove_task(schemaTask.id);
+
+    // 4. Verify the schema is no longer in the schema_index and the atom is gone
+    expect(worldModel.schema_index.has(schemaPattern, schemaAtom.id)).toBe(false);
+    expect(worldModel.atoms[schemaAtom.id]).toBeUndefined();
+  });
 });

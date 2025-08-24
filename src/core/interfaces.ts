@@ -68,5 +68,7 @@ export interface MatchResult {
 
 export interface PatternMatcher {
   add(pattern: TriggerPattern, schema_id: UUID): void;
+  remove(pattern: TriggerPattern, schema_id: UUID): void;
   match(content_a: string, content_b: string): MatchResult[];
+  has(pattern: TriggerPattern, schema_id: UUID): boolean;
 }

@@ -111,6 +111,31 @@ export class InMemoryPatternMatcher implements PatternMatcher {
         }
     }
 
+    remove(pattern: TriggerPattern, schema_id: UUID): void {
+        const key = JSON.stringify(pattern);
+        const map = typeof pattern === 'string' ? this.single_premise_patterns : this.dual_premise_patterns;
+        if (map.has(key)) {
+            const schema_ids = map.get(key)!;
+            const index = schema_ids.indexOf(schema_id);
+            if (index > -1) {
+                schema_ids.splice(index, 1);
+            }
+            if (schema_ids.length === 0) {
+                map.delete(key);
+            }
+        }
+    }
+
+    has(pattern: TriggerPattern, schema_id: UUID): boolean {
+        const key = JSON.stringify(pattern);
+        const map = typeof pattern === 'string' ? this.single_premise_patterns : this.dual_premise_patterns;
+        if (!map.has(key)) {
+            return false;
+        }
+        const schema_ids = map.get(key)!;
+        return schema_ids.includes(schema_id);
+    }
+
     match(content_a: string, content_b: string): MatchResult[] {
         const results: MatchResult[] = [];
         const contentA_SExpr = parseSExpression(content_a);

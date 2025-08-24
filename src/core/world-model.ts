@@ -118,6 +118,11 @@ export class WorldModel {
         // remove from semantic index
         this.semantic_index.remove(atom.id);
 
+        // If it's a schema, remove from schema index as well
+        if (is_schema_pattern(atom.content)) {
+          this.schema_index.remove(atom.content, atom.id);
+        }
+
         delete this.atoms[atom_id_to_remove];
       }
     }
