@@ -33,9 +33,10 @@ describe('TestResultProcedure', () => {
             ]
         };
         const fake_json_str = JSON.stringify(fake_json_obj);
-        const content = `(execute "test_result" json_content:"${fake_json_str}")`;
+        const content = `(execute "test_result")`;
+        const bindings = { 'json_content': fake_json_str };
 
-        const tasks = procedure.execute(content, {}, worldModel);
+        const tasks = procedure.execute(content, bindings, worldModel);
 
         expect(tasks.length).toBe(1);
         const task = tasks[0];

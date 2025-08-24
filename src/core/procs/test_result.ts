@@ -27,9 +27,9 @@ export class TestResultProcedure implements ProcedureHandler {
     }
 
     execute(content: string, bindings: Record<string, string>, world_model: WorldModel): Task[] {
-        const json_content = extract_param(content, 'json_content');
+        const json_content = bindings['json_content'];
         if (!json_content) {
-            console.error("TestResultProcedure: json_content not provided.");
+            console.error("TestResultProcedure: json_content not provided in bindings.");
             return [];
         }
 

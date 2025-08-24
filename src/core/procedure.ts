@@ -1,13 +1,34 @@
-import { Task, SemanticAtom, DerivationStamp, AttentionValue, TruthValue } from './models';
+import { v4 as uuidv4 } from 'uuid';
+import { Task, SemanticAtom } from './models';
 import { UUID, TaskType } from './types';
 import { WorldModel } from './world-model';
 import { ProcedureHandler } from './interfaces';
 import { substituteInContent } from './scope';
 import { parseSExpression, SExpression } from './s-expression';
 
-// Helper to generate a UUID (placeholder)
-function generate_uuid(prefix: string = ''): UUID {
-  return `${prefix}-${Math.random().toString(36).substring(2, 15)}`;
+function create_error_task(e: any, handler_name: string, parent_task_id: UUID, world_model: WorldModel): Task[] {
+    console.error(`Error executing procedure ${handler_name}:`, e);
+    const error_atom: SemanticAtom = {
+      id: uuidv4(),
+      content: `(execution_error "${handler_name}" "${e.message || String(e)}")`,
+      embedding: [],
+    };
+    world_model.add_atom(error_atom);
+
+    return [
+      {
+        id: uuidv4(),
+        atom_id: error_atom.id,
+        type: TaskType.BELIEF,
+        truth: { frequency: 0.0, confidence: 1.0 },
+        attention: { priority: 0.9, durability: 0.9 },
+        stamp: {
+          timestamp: Date.now() / 1000,
+          parent_ids: [parent_task_id],
+          schema_id: uuidv4(),
+        },
+      },
+    ];
 }
 
 export function is_procedure_task(task: Task, world_model: WorldModel): boolean {
@@ -47,16 +68,33 @@ export function extract_handler_name(content: string): string | undefined {
 export function extract_param(content: string, paramName: string): string | undefined {
   try {
     const sExpr = parseSExpression(content);
-    if (sExpr.head === 'execute') {
-      for (let i = 1; i < sExpr.args.length; i++) {
-        const arg = sExpr.args[i];
+
+    const findExecute = (expr: SExpression): SExpression | undefined => {
+        if (expr.head === 'execute') return expr;
+        for(const arg of expr.args) {
+            if(typeof arg !== 'string') {
+                const found = findExecute(arg);
+                if (found) return found;
+            }
+        }
+        return undefined;
+    };
+
+    const executeExpr = findExecute(sExpr);
+
+    if (executeExpr) {
+      for (const arg of executeExpr.args) {
         if (typeof arg === 'string' && arg.startsWith(`${paramName}:`)) {
-          return arg.substring(paramName.length + 1);
+          let value = arg.substring(paramName.length + 1);
+          if (value.startsWith('"') && value.endsWith('"')) {
+            value = value.substring(1, value.length - 1);
+          }
+          return value;
         }
       }
     }
   } catch (e) {
-    console.error("Error parsing S-Expression for parameter extraction:", e);
+    console.error(`Error parsing S-Expression for parameter extraction of '${paramName}':`, e);
   }
   return undefined;
 }
@@ -83,27 +121,6 @@ export function execute_procedure(
   try {
     return handlers[handler_name].execute(content, bindings || {}, world_model);
   } catch (e: any) {
-    console.error(`Error executing procedure ${handler_name}:`, e);
-    const error_atom = {
-      id: generate_uuid(),
-      content: `(execution_error "${handler_name}" "${e.message || String(e)}")`,
-      embedding: [], // Placeholder
-    };
-    world_model.add_atom(error_atom);
-
-    return [
-      {
-        id: generate_uuid(),
-        atom_id: error_atom.id,
-        type: TaskType.BELIEF,
-        truth: { frequency: 0.0, confidence: 1.0 },
-        attention: { priority: 0.9, durability: 0.9 },
-        stamp: {
-          timestamp: Date.now() / 1000,
-          parent_ids: [task.id],
-          schema_id: generate_uuid("error_handler"),
-        },
-      },
-    ];
+    return create_error_task(e, handler_name, task.id, world_model);
   }
 }

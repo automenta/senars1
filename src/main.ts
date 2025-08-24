@@ -1,14 +1,14 @@
 import './style.css';
-import { initGUI, render } from './gui';
+import { Gui } from './gui';
 import { App } from './app';
 
 document.addEventListener('DOMContentLoaded', () => {
   const app = new App();
-  initGUI(app);
+  const gui = new Gui(app, app.world_model, app.agenda, app.schema_registry);
+  gui.init();
 
-  // Simulate the cognitive cycle
   setInterval(() => {
     app.tick();
-    render();
-  }, 1000); // Tick every second
+    gui.render();
+  }, 1000);
 });
