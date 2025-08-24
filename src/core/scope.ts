@@ -8,8 +8,8 @@ import { matchSExpressionPattern } from './implementations';
 function parseSingleScopeVariable(varStr: string): ScopeVariable {
   const parts = varStr.trim().split('=');
   const name = parts[0].trim();
-  if (!name.startsWith('%')) {
-    throw new Error(`Invalid scope variable format: ${varStr}. Must start with '%'.`);
+  if (!name.startsWith('$')) {
+    throw new Error(`Invalid scope variable format: ${varStr}. Must start with '$'.`);
   }
   const required = parts.length === 1;
   const defaultValue = parts.length > 1 ? parts[1].trim() : undefined;
@@ -87,9 +87,7 @@ export function resolveScopeBindings(
           if (matchSExpressionPattern(body_pattern_sexpr, context_sexpr, temp_bindings)) {
             // If match is successful, merge the bindings
             for (const key in temp_bindings) {
-              if (!bindings[key]) { // Don't overwrite existing bindings
-                bindings[key] = temp_bindings[key];
-              }
+              bindings[key] = temp_bindings[key];
             }
           }
         }
@@ -114,8 +112,8 @@ export function resolveScopeBindings(
 export function substituteInContent(content: string, bindings: Record<string, string>): string {
     let result = content;
     for (const varName in bindings) {
-      // Ensure we replace the variable token, e.g., %var
-      const regex = new RegExp(varName.replace(/%/g, '\\%'), 'g');
+      // Ensure we replace the variable token, e.g., $var
+      const regex = new RegExp(varName.replace(/\$/g, '\\$'), 'g');
       result = result.replace(regex, bindings[varName]);
     }
     return result;

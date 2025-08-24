@@ -3,99 +3,54 @@ export interface SExpression {
   args: (string | SExpression)[];
 }
 
-// Helper to tokenize an S-Expression string, respecting quotes and parentheses
-function tokenizeSExpression(sExpr: string): string[] {
-  const tokens: string[] = [];
-  let currentToken = '';
-  let inQuote = false;
-  let parenDepth = 0;
-
-  for (let i = 0; i < sExpr.length; i++) {
-    const char = sExpr[i];
-
-    if (char === '"') {
-      inQuote = !inQuote;
-      currentToken += char;
-    } else if (inQuote) {
-      currentToken += char;
-    } else if (char === '(') {
-      if (currentToken) {
-        tokens.push(currentToken);
-        currentToken = '';
-      }
-      tokens.push('(');
-      parenDepth++;
-    } else if (char === ')') {
-      if (currentToken) {
-        tokens.push(currentToken);
-        currentToken = '';
-      }
-      tokens.push(')');
-      parenDepth--;
-    } else if (char === ' ' && parenDepth === 0) {
-      if (currentToken) {
-        tokens.push(currentToken);
-        currentToken = '';
-      }
-    } else {
-      currentToken += char;
+// A robust S-expression parser.
+// This is a simplified version of a recursive descent parser.
+function parseSExpressionRecursive(tokens: string[]): [SExpression | string, number] {
+    let token = tokens[0];
+    if (token === undefined) {
+        throw new Error("Unexpected end of input.");
     }
-  }
 
-  if (currentToken) {
-    tokens.push(currentToken);
-  }
-  return tokens.filter(token => token.trim() !== '');
+    if (token === '(') {
+        const expr: SExpression = { head: '', args: [] };
+        let i = 1;
+
+        // The head of the S-expression.
+        if (tokens[i] && tokens[i] !== '(' && tokens[i] !== ')') {
+            expr.head = tokens[i];
+            i++;
+        }
+
+        // The arguments of the S-expression.
+        while (tokens[i] && tokens[i] !== ')') {
+            const [arg, consumed] = parseSExpressionRecursive(tokens.slice(i));
+            expr.args.push(arg);
+            i += consumed;
+        }
+
+        if (tokens[i] !== ')') {
+            throw new Error("Expected ')' at the end of S-expression.");
+        }
+
+        return [expr, i + 1];
+    } else if (token === ')') {
+        throw new Error("Unexpected ')' token.");
+    } else {
+        return [token, 1];
+    }
 }
 
 export function parseSExpression(sExpr: string): SExpression {
-  sExpr = sExpr.trim();
-  if (!sExpr.startsWith('(') || !sExpr.endsWith(')')) {
-    throw new Error("Invalid S-Expression format: must start and end with parentheses.");
-  }
-
-  // Remove outer parentheses and tokenize the inner content
-  const innerContent = sExpr.substring(1, sExpr.length - 1).trim();
-  const tokens = tokenizeSExpression(innerContent);
-
-  if (tokens.length === 0) {
-    throw new Error("Empty S-Expression.");
-  }
-
-  const head = tokens[0];
-  const args: (string | SExpression)[] = [];
-
-  let i = 1;
-  while (i < tokens.length) {
-    const token = tokens[i];
-    if (token === '(') {
-      // Find the matching closing parenthesis for nested S-Expression
-      let nestedParenDepth = 1;
-      let j = i + 1;
-      while (j < tokens.length && nestedParenDepth > 0) {
-        if (tokens[j] === '(') nestedParenDepth++;
-        else if (tokens[j] === ')') nestedParenDepth--;
-        j++;
-      }
-      if (nestedParenDepth !== 0) {
-        throw new Error("Mismatched parentheses in S-Expression.");
-      }
-      const nestedSExprTokens = tokens.slice(i, j);
-      args.push(parseSExpression(`(${nestedSExprTokens.join(' ')})`));
-      i = j;
-    } else {
-      // Handle string literals like (. "some string")
-      if (token === '.' && tokens[i + 1] && tokens[i + 1].startsWith('"') && tokens[i + 1].endsWith('"')) {
-        args.push(`(. ${tokens[i + 1]})`); // Keep the original format for now
-        i += 2;
-      } else {
-        args.push(token);
-        i++;
-      }
+    const tokens = sExpr.replace(/\(/g, ' ( ').replace(/\)/g, ' ) ').trim().split(/\s+/);
+    const [result, consumed] = parseSExpressionRecursive(tokens);
+    if (consumed < tokens.length) {
+        // This can happen with multiple top-level S-expressions, which is not supported.
+        console.warn("Input has extra tokens that were not consumed.", { consumed, tokens });
     }
-  }
-
-  return { head, args };
+    if (typeof result === 'string') {
+        throw new Error("A single token is not a valid S-Expression. Must be enclosed in parentheses.");
+    }
+    return result;
 }
 
 export function sExpressionToString(sExpr: SExpression | string): string {

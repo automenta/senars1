@@ -49,7 +49,7 @@ describe('Agenda (PriorityQueue)', () => {
     expect(await agenda.isEmpty()).toBe(true);
   });
 
-  it('should return undefined when popping from an empty agenda', async () => {
-    expect(await agenda.pop()).toBeUndefined();
+  it('should throw an error when popping from an empty agenda', async () => {
+    await expect(agenda.pop()).rejects.toThrow("Agenda is empty.");
   });
 });

@@ -7,7 +7,7 @@ import { Mutex } from 'async-mutex';
  * It uses a heap-based priority queue for efficiency and a mutex to ensure
  * safe concurrent access from multiple worker threads.
  */
-export class PriorityQueue {
+export class Agenda {
   private queue: PriorityQueueLib<Task>;
   private mutex = new Mutex();
 
