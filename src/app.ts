@@ -172,4 +172,15 @@ export class App {
       }
     }
   }
+
+  public dispute_belief(taskId: string) {
+    const task = this.world_model.tasks[taskId];
+    if (task && task.type === TaskType.BELIEF) {
+        task.verified = false; // Mark as disputed
+        if (task.truth) {
+            task.truth.confidence = Math.max(0.0, task.truth.confidence - 0.2);
+        }
+        task.attention.durability = Math.max(0.0, task.attention.durability - 0.2);
+    }
+  }
 }

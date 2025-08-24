@@ -250,17 +250,22 @@ export class Gui {
   private attach_knowledge_action_listeners() {
     this.completedThoughtsList.addEventListener('click', async (event) => {
       const target = event.target as HTMLElement;
-      const taskId = target.dataset.taskId;
+      const button = target.closest('.action-btn');
+      if (!button) return;
+
+      const taskId = button.dataset.taskId;
       if (!taskId) return;
 
-      if (target.classList.contains('star-btn')) {
-        await this.app.star_belief(taskId);
-      } else if (target.classList.contains('question-btn')) {
-        await this.app.question_belief(taskId);
-      } else if (target.classList.contains('forget-btn')) {
-        await this.app.forget_belief(taskId);
-      } else if (target.classList.contains('verify-btn')) {
+      if (button.classList.contains('thumb-up-btn')) {
         await this.app.verify_belief(taskId);
+      } else if (button.classList.contains('thumb-down-btn')) {
+        await this.app.dispute_belief(taskId);
+      } else if (button.classList.contains('star-btn')) {
+        await this.app.star_belief(taskId);
+      } else if (button.classList.contains('question-btn')) {
+        await this.app.question_belief(taskId);
+      } else if (button.classList.contains('forget-btn')) {
+        await this.app.forget_belief(taskId);
       }
       await this.render();
     });
@@ -269,13 +274,16 @@ export class Gui {
   private attach_active_thought_listeners() {
     this.activeThoughtsList.addEventListener('click', async (event) => {
         const target = event.target as HTMLElement;
-        const taskId = target.closest('.thought-card')?.dataset.taskId;
+        const button = target.closest('.feedback-btn');
+        if (!button) return;
+
+        const taskId = button.dataset.taskId;
         if (!taskId) return;
 
-        if (target.classList.contains('promote-btn')) {
+        if (button.classList.contains('thumb-up-btn')) {
             await this.app.boost_task(taskId);
             await this.render();
-        } else if (target.classList.contains('demote-btn')) {
+        } else if (button.classList.contains('thumb-down-btn')) {
             await this.app.reduce_task_priority(taskId);
             await this.render();
         }
@@ -494,29 +502,28 @@ export class Gui {
         details.push(`<p>• Atom ID: ${task.atom_id}</p>`);
     }
 
+    const feedbackActions = `
+      <div class="feedback-actions">
+        <button class="action-btn feedback-btn thumb-up-btn" data-task-id="${task.id}" title="This is correct/important">👍</button>
+        <button class="action-btn feedback-btn thumb-down-btn" data-task-id="${task.id}" title="This is incorrect/unimportant">👎</button>
+      </div>
+    `;
+
     if (isCompleted) {
-        const verifyButton = !task.verified
-            ? `<button class="action-btn verify-btn" data-task-id="${task.id}">✔️ Verify</button>`
-            : '';
         details.push(`<div class="knowledge-actions">
+            ${feedbackActions}
             <button class="action-btn star-btn" data-task-id="${task.id}">⭐ Star</button>
             <button class="action-btn question-btn" data-task-id="${task.id}">❓ Question</button>
-            ${verifyButton}
             <button class="action-btn forget-btn" data-task-id="${task.id}">🗑️ Forget</button>
           </div>`);
     }
 
-    const hoverActions = !isCompleted ? `
-      <div class="hover-actions">
-        <button class="hover-btn promote-btn" data-task-id="${task.id}" title="Promote">▲</button>
-        <button class="hover-btn demote-btn" data-task-id="${task.id}" title="Demote">▼</button>
-      </div>
-    ` : '';
-
     return `
       <div class="thought-card ${priorityClass}" data-task-id="${task.id}">
-        ${hoverActions}
-        <h4>${icon} ${isPinned ? '📌' : ''}[${task.priority_text}] ${task.content}</h4>
+        <div class="card-header">
+            <h4>${icon} ${isPinned ? '📌' : ''}[${task.priority_text}] ${task.content}</h4>
+            ${!isCompleted ? feedbackActions : ''}
+        </div>
         ${details.filter(Boolean).join('')}
       </div>
     `;
