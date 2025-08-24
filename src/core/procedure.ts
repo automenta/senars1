@@ -33,84 +33,31 @@ function create_error_task(e: any, handler_name: string, parent_task_id: UUID, w
 
 export function is_procedure_task(task: Task, world_model: WorldModel): boolean {
   const atom = world_model.get_atom(task.atom_id);
-  try {
-    const s_expr = parseSExpression(atom.content);
-    // A procedure is an S-expression with 'execute' as its head.
-    // It can be nested, e.g. (GOAL (execute ...))
-    const find_execute = (expr: SExpression | string): boolean => {
-        if (typeof expr === 'string') {
-            return false;
-        }
-        if (expr.head === 'execute') {
-            return true;
-        }
-        return expr.args.some(find_execute);
-    };
-    return find_execute(s_expr);
-  } catch (e) {
-    // If parsing fails, it's not a well-formed procedure task.
-    return false;
-  }
+  // A procedure is identified by the presence of an '(execute ...)' call.
+  // A simple string search is more robust than parsing, as the call can be
+  // embedded in other syntax like scopes '{...}' which are not valid S-Expressions.
+  return atom.content.includes('(execute ');
 }
 
 export function extract_handler_name(content: string): string | undefined {
-  try {
-    const sExpr = parseSExpression(content);
-
-    const findExecute = (expr: SExpression): SExpression | undefined => {
-        if (expr.head === 'execute') return expr;
-        for(const arg of expr.args) {
-            if(typeof arg !== 'string') {
-                const found = findExecute(arg);
-                if (found) return found;
-            }
-        }
-        return undefined;
-    };
-
-    const executeExpr = findExecute(sExpr);
-
-    if (executeExpr && executeExpr.args.length > 0 && typeof executeExpr.args[0] === 'string') {
-      return executeExpr.args[0].replace(/"/g, ''); // Strip quotes
+    // Use a regex to find the handler name within an (execute ...) call,
+    // which is more robust than parsing the whole string as an S-Expression.
+    const match = content.match(/\(execute\s+"([^"]+)"/);
+    if (match && match[1]) {
+        return match[1];
     }
-  } catch (e) {
-    console.error("Error parsing S-Expression for handler name:", e);
-  }
-  return undefined;
+    return undefined;
 }
 
 export function extract_param(content: string, paramName: string): string | undefined {
-  try {
-    const sExpr = parseSExpression(content);
-
-    const findExecute = (expr: SExpression): SExpression | undefined => {
-        if (expr.head === 'execute') return expr;
-        for(const arg of expr.args) {
-            if(typeof arg !== 'string') {
-                const found = findExecute(arg);
-                if (found) return found;
-            }
-        }
-        return undefined;
-    };
-
-    const executeExpr = findExecute(sExpr);
-
-    if (executeExpr) {
-      for (const arg of executeExpr.args) {
-        if (typeof arg === 'string' && arg.startsWith(`${paramName}:`)) {
-          let value = arg.substring(paramName.length + 1);
-          if (value.startsWith('"') && value.endsWith('"')) {
-            value = value.substring(1, value.length - 1);
-          }
-          return value;
-        }
-      }
+    // This regex finds a parameter in the format `paramName:"value"` within the content string.
+    // It's designed to work even if the content is not a perfect S-Expression (e.g., inside a scope).
+    const regex = new RegExp(`${paramName}:"([^"]*)"`);
+    const match = content.match(regex);
+    if (match && match[1]) {
+        return match[1];
     }
-  } catch (e) {
-    console.error(`Error parsing S-Expression for parameter extraction of '${paramName}':`, e);
-  }
-  return undefined;
+    return undefined;
 }
 
 export async function execute_procedure(

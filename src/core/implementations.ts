@@ -138,8 +138,15 @@ export class InMemoryPatternMatcher implements PatternMatcher {
 
     match(content_a: string, content_b: string): MatchResult[] {
         const results: MatchResult[] = [];
-        const contentA_SExpr = parseSExpression(content_a);
-        const contentB_SExpr = parseSExpression(content_b);
+        let contentA_SExpr, contentB_SExpr;
+
+        try {
+            contentA_SExpr = parseSExpression(content_a);
+            contentB_SExpr = parseSExpression(content_b);
+        } catch (e) {
+            // If either content cannot be parsed, they cannot match any S-Expression patterns.
+            return [];
+        }
 
         // Dual premise matching
         for (const [patternKey, schema_ids] of this.dual_premise_patterns.entries()) {
@@ -267,24 +274,29 @@ export class DefaultResonanceStrategy implements IResonanceStrategy {
 
     // Also consider tasks that have similar symbolic content (e.g., same head of S-expression)
     try {
-      const focusSExpr = parseSExpression(focusAtom.content);
-      for (const content in world_model.symbolic_index) {
-        if (content === focusAtom.content) continue; // Don't match with self
-        const contentSExpr = parseSExpression(content);
-        if (focusSExpr.head === contentSExpr.head) {
-          for (const atomId of world_model.symbolic_index[content]) {
-            for (const task of Object.values(world_model.tasks)) {
-              if (task.atom_id === atomId && task.id !== focus.id && !addedTaskIds.has(task.id)) {
-                contextTasks.push(task);
-                addedTaskIds.add(task.id);
-                if (contextTasks.length >= k) return contextTasks;
-              }
+        const focusSExpr = parseSExpression(focusAtom.content);
+        for (const content in world_model.symbolic_index) {
+            if (content === focusAtom.content) continue;
+            try {
+                const contentSExpr = parseSExpression(content);
+                if (focusSExpr.head === contentSExpr.head) {
+                    for (const atomId of world_model.symbolic_index[content]) {
+                        for (const task of Object.values(world_model.tasks)) {
+                            if (task.atom_id === atomId && task.id !== focus.id && !addedTaskIds.has(task.id)) {
+                                contextTasks.push(task);
+                                addedTaskIds.add(task.id);
+                                if (contextTasks.length >= k) return contextTasks;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // Ignore content that is not a valid S-Expression (like scope expressions)
+                continue;
             }
-          }
         }
-      }
     } catch (e) {
-      console.warn("Error parsing S-Expression for symbolic resonance:", e);
+        // Ignore if the focus task itself is not a valid S-Expression
     }
 
     return contextTasks.slice(0, k);
