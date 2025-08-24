@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { WorldModel } from '../world-model';
 import { TestResultProcedure } from '../procs/test_result';
 import { MockResonanceStrategy, MockTruthPolicy } from './world-model.test';
+import { InMemoryPatternMatcher } from '../implementations';
 import { Task, SemanticAtom } from '../models';
 import { TaskType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,11 +14,11 @@ describe('TestResultProcedure', () => {
     beforeEach(() => {
         const resonanceStrategy = new MockResonanceStrategy();
         const truthPolicy = new MockTruthPolicy();
-        worldModel = new WorldModel(resonanceStrategy, truthPolicy);
+        worldModel = new WorldModel(resonanceStrategy, truthPolicy, new InMemoryPatternMatcher());
         procedure = new TestResultProcedure();
     });
 
-    it('should create a BELIEF task for a failing test', () => {
+    it('should create a BELIEF task for a failing test', async () => {
         const fake_json_obj = {
             testResults: [
                 {
@@ -36,7 +37,7 @@ describe('TestResultProcedure', () => {
         const content = `(execute "test_result")`;
         const bindings = { 'json_content': fake_json_str };
 
-        const tasks = procedure.execute(content, bindings, worldModel);
+        const tasks = await procedure.execute(content, bindings, worldModel);
 
         expect(tasks.length).toBe(1);
         const task = tasks[0];

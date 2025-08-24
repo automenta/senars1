@@ -5,6 +5,7 @@ import { WorldModel } from '../world-model';
 import { TaskType, UUID } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { MockResonanceStrategy, MockTruthPolicy } from './world-model.test';
+import { InMemoryPatternMatcher } from '../implementations';
 
 describe('Scope Parsing and Resolution', () => {
   let worldModel: WorldModel;
@@ -14,7 +15,7 @@ describe('Scope Parsing and Resolution', () => {
   beforeEach(() => {
     mockResonanceStrategy = new MockResonanceStrategy();
     mockTruthPolicy = new MockTruthPolicy();
-    worldModel = new WorldModel(mockResonanceStrategy, mockTruthPolicy);
+    worldModel = new WorldModel(mockResonanceStrategy, mockTruthPolicy, new InMemoryPatternMatcher());
   });
 
   describe('parseScopeVariables', () => {
@@ -58,49 +59,49 @@ describe('Scope Parsing and Resolution', () => {
 
 
   describe('resolveScopeBindings', () => {
-    it('should resolve bindings from default values', () => {
+    it('should resolve bindings from default values', async () => {
       const scopeAtom: SemanticAtom = {
         id: uuidv4(),
         content: '{(%x=defaultX, %y=defaultY), (action %x %y)}',
         embedding: [],
       };
-      worldModel.add_atom(scopeAtom);
+      await worldModel.add_atom(scopeAtom);
 
       const taskA: Task = {
         id: uuidv4(), atom_id: scopeAtom.id, type: TaskType.GOAL,
         attention: { priority: 1, durability: 1 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' }
       };
 
-      const bindings = resolveScopeBindings(taskA, [], worldModel);
+      const bindings = await resolveScopeBindings(taskA, [], worldModel);
       expect(bindings).toEqual({ '%x': 'defaultX', '%y': 'defaultY' });
     });
 
-    it('should return undefined if required variables are missing', () => {
+    it('should return undefined if required variables are missing', async () => {
       const scopeAtom: SemanticAtom = {
         id: uuidv4(),
         content: '{(%requiredVar), (action %requiredVar)}',
         embedding: [],
       };
-      worldModel.add_atom(scopeAtom);
+      await worldModel.add_atom(scopeAtom);
 
       const taskA: Task = {
         id: uuidv4(), atom_id: scopeAtom.id, type: TaskType.GOAL,
         attention: { priority: 1, durability: 1 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' }
       };
 
-      const bindings = resolveScopeBindings(taskA, [], worldModel);
+      const bindings = await resolveScopeBindings(taskA, [], worldModel);
       expect(bindings).toBeUndefined();
     });
 
-    it('should resolve bindings from context tasks', () => {
+    it('should resolve bindings from context tasks', async () => {
       const scopeAtom: SemanticAtom = {
         id: uuidv4(),
         content: '{(%item, %color=red), (paint %item %color)}',
         embedding: [],
       };
       const contextAtom: SemanticAtom = { id: uuidv4(), content: '(paint car blue)', embedding: [] };
-      worldModel.add_atom(scopeAtom);
-      worldModel.add_atom(contextAtom);
+      await worldModel.add_atom(scopeAtom);
+      await worldModel.add_atom(contextAtom);
 
       const scopeTask: Task = {
         id: uuidv4(), atom_id: scopeAtom.id, type: TaskType.GOAL,
@@ -111,11 +112,11 @@ describe('Scope Parsing and Resolution', () => {
         attention: { priority: 1, durability: 1 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' }
       };
 
-      const bindings = resolveScopeBindings(scopeTask, [contextTask], worldModel);
+      const bindings = await resolveScopeBindings(scopeTask, [contextTask], worldModel);
       expect(bindings).toEqual({ '%item': 'car', '%color': 'blue' });
     });
 
-    it('should resolve bindings from a nested sub-expression in a context task', () => {
+    it('should resolve bindings from a nested sub-expression in a context task', async () => {
         const scopeAtom: SemanticAtom = {
           id: uuidv4(),
           content: '{(%substance, %animal), (is_toxic %substance %animal)}',
@@ -126,8 +127,8 @@ describe('Scope Parsing and Resolution', () => {
             content: '(implies (eats cat chocolate) (is_toxic chocolate cat))',
             embedding: []
         };
-        worldModel.add_atom(scopeAtom);
-        worldModel.add_atom(contextAtom);
+        await worldModel.add_atom(scopeAtom);
+        await worldModel.add_atom(contextAtom);
 
         const scopeTask: Task = {
           id: uuidv4(), atom_id: scopeAtom.id, type: TaskType.GOAL,
@@ -138,7 +139,7 @@ describe('Scope Parsing and Resolution', () => {
             attention: { priority: 1, durability: 1 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' }
         };
 
-        const bindings = resolveScopeBindings(scopeTask, [contextTask], worldModel);
+        const bindings = await resolveScopeBindings(scopeTask, [contextTask], worldModel);
         expect(bindings).toEqual({ '%substance': 'chocolate', '%animal': 'cat' });
       });
   });

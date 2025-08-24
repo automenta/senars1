@@ -41,6 +41,11 @@ export class CognitiveEngine {
       const task_a = await this.agenda.pop();
       if (!task_a) return; // In case pop returns null/undefined
 
+      // Memorize beliefs first
+      if (task_a.type === TaskType.BELIEF) {
+        await this.world_model.add_task(task_a);
+      }
+
       const context = this.world_model.find_resonant(task_a, 10);
 
       this.last_scope_bindings = undefined;
@@ -57,10 +62,6 @@ export class CognitiveEngine {
         await this.handle_procedure_task(task_a, scope_bindings);
       } else {
         await this.handle_regular_task(task_a, context, scope_bindings);
-      }
-
-      if (task_a.type === TaskType.BELIEF) {
-        this.world_model.add_task(task_a);
       }
     } catch (error) {
       console.error("Cognitive Engine Tick Error:", error);

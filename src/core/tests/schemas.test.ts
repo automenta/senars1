@@ -5,6 +5,7 @@ import { TaskType, UUID } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { MockTruthPolicy, MockResonanceStrategy } from './world-model.test'; // Reusing mocks
 import { WorldModel } from '../world-model';
+import { InMemoryPatternMatcher } from '../implementations';
 
 describe('DeductionSchema', () => {
   let deductionSchema: DeductionSchema;
@@ -15,14 +16,14 @@ describe('DeductionSchema', () => {
     deductionSchema = new DeductionSchema();
     mockTruthPolicy = new MockTruthPolicy();
     const resonanceStrategy = new MockResonanceStrategy();
-    worldModel = new WorldModel(resonanceStrategy, mockTruthPolicy);
+    worldModel = new WorldModel(resonanceStrategy, mockTruthPolicy, new InMemoryPatternMatcher());
   });
 
   it('should return the correct trigger pattern', () => {
     expect(deductionSchema.get_trigger_pattern()).toEqual(['(implies $P $Q)', '$P']);
   });
 
-  it('should apply the schema and derive a new belief', () => {
+  it('should apply the schema and derive a new belief', async () => {
     const premiseAtom: SemanticAtom = {
       id: "premise_atom_id",
       content: '(eats cat chocolate)',
@@ -33,8 +34,8 @@ describe('DeductionSchema', () => {
       content: '(implies (eats cat chocolate) (is_sick cat))',
       embedding: [],
     };
-    worldModel.add_atom(premiseAtom);
-    worldModel.add_atom(implicationAtom);
+    await worldModel.add_atom(premiseAtom);
+    await worldModel.add_atom(implicationAtom);
 
     const taskA: Task = { // Implication
       id: uuidv4(),
@@ -54,7 +55,7 @@ describe('DeductionSchema', () => {
     };
 
     const pattern_bindings = { '$P': '(eats cat chocolate)', '$Q': '(is_sick cat)' };
-    const derivedTasks = deductionSchema.apply(taskA, taskB, mockTruthPolicy, worldModel, pattern_bindings);
+    const derivedTasks = await deductionSchema.apply(taskA, taskB, mockTruthPolicy, worldModel, pattern_bindings);
 
     expect(derivedTasks.length).toBe(1);
     const derivedTask = derivedTasks[0];
@@ -65,7 +66,7 @@ describe('DeductionSchema', () => {
     expect(derivedTask.truth).toEqual({ frequency: 0.7, confidence: 0.7 }); // From MockTruthPolicy
   });
 
-  it('should apply with bindings', () => {
+  it('should apply with bindings', async () => {
     const premiseAtom: SemanticAtom = {
       id: "premise_atom_id",
       content: '(eats cat chocolate)',
@@ -76,8 +77,8 @@ describe('DeductionSchema', () => {
       content: '(implies (eats cat chocolate) (is_sick %who))', // Using a scope variable
       embedding: [],
     };
-    worldModel.add_atom(premiseAtom);
-    worldModel.add_atom(implicationAtom);
+    await worldModel.add_atom(premiseAtom);
+    await worldModel.add_atom(implicationAtom);
 
     const taskA: Task = { // Implication
       id: uuidv4(),
@@ -99,7 +100,7 @@ describe('DeductionSchema', () => {
     const pattern_bindings = { '$P': '(eats cat chocolate)', '$Q': '(is_sick %who)' };
 
 
-    const derivedTasks = deductionSchema.apply_with_bindings(taskA, taskB, mockTruthPolicy, scope_bindings, worldModel, pattern_bindings);
+    const derivedTasks = await deductionSchema.apply_with_bindings(taskA, taskB, mockTruthPolicy, scope_bindings, worldModel, pattern_bindings);
 
     expect(derivedTasks.length).toBe(1);
     const derivedTask = derivedTasks[0];

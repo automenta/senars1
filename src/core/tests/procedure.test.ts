@@ -6,13 +6,14 @@ import { SemanticAtom, Task } from '../models';
 import { TaskType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { MockResonanceStrategy, MockTruthPolicy } from './world-model.test';
+import { InMemoryPatternMatcher } from '../implementations';
 
 class MockSuccessHandler implements ProcedureHandler {
   name = () => 'success';
   can_handle = (content: string) => content.includes('success');
   async execute(content: string, bindings: Record<string, string>, world_model: WorldModel): Promise<Task[]> {
     const successAtom: SemanticAtom = { id: uuidv4(), content: '(result success)', embedding: [] };
-    world_model.add_atom(successAtom);
+    await world_model.add_atom(successAtom);
     return [{
       id: uuidv4(),
       atom_id: successAtom.id,
@@ -46,7 +47,7 @@ describe('Procedure Framework', () => {
   beforeEach(() => {
     const resonanceStrategy = new MockResonanceStrategy();
     const truthPolicy = new MockTruthPolicy();
-    worldModel = new WorldModel(resonanceStrategy, truthPolicy);
+    worldModel = new WorldModel(resonanceStrategy, truthPolicy, new InMemoryPatternMatcher());
     handlers = {
       'success': new MockSuccessHandler(),
       'failure': new MockFailureHandler(),
@@ -54,9 +55,9 @@ describe('Procedure Framework', () => {
     };
   });
 
-  const createTask = (content: string, type: TaskType = TaskType.GOAL): Task => {
+  const createTask = async (content: string, type: TaskType = TaskType.GOAL): Promise<Task> => {
     const atom: SemanticAtom = { id: uuidv4(), content, embedding: [] };
-    worldModel.add_atom(atom);
+    await worldModel.add_atom(atom);
     return {
       id: uuidv4(),
       atom_id: atom.id,
@@ -67,18 +68,18 @@ describe('Procedure Framework', () => {
   };
 
   describe('is_procedure_task', () => {
-    it('should identify a simple procedure task', () => {
-      const task = createTask('(execute "success")', TaskType.PROCEDURE);
+    it('should identify a simple procedure task', async () => {
+      const task = await createTask('(execute "success")', TaskType.PROCEDURE);
       expect(is_procedure_task(task, worldModel)).toBe(true);
     });
 
-    it('should identify a nested procedure task', () => {
-      const task = createTask('(GOAL (execute "success"))');
+    it('should identify a nested procedure task', async () => {
+      const task = await createTask('(GOAL (execute "success"))');
       expect(is_procedure_task(task, worldModel)).toBe(true);
     });
 
-    it('should return false for non-procedure tasks', () => {
-      const task = createTask('(do_something else)');
+    it('should return false for non-procedure tasks', async () => {
+      const task = await createTask('(do_something else)');
       expect(is_procedure_task(task, worldModel)).toBe(false);
     });
   });
@@ -97,7 +98,7 @@ describe('Procedure Framework', () => {
 
   describe('execute_procedure', () => {
     it('should execute a successful handler and return result tasks', async () => {
-      const task = createTask('(execute "success")', TaskType.PROCEDURE);
+      const task = await createTask('(execute "success")', TaskType.PROCEDURE);
       const results = await execute_procedure(task, worldModel, handlers, {});
       expect(results.length).toBe(1);
       const resultAtom = worldModel.get_atom(results[0].atom_id);
@@ -105,7 +106,7 @@ describe('Procedure Framework', () => {
     });
 
     it('should create an error task when a handler fails', async () => {
-      const task = createTask('(execute "failure")', TaskType.PROCEDURE);
+      const task = await createTask('(execute "failure")', TaskType.PROCEDURE);
       const results = await execute_procedure(task, worldModel, handlers, {});
       expect(results.length).toBe(1);
       const errorAtom = worldModel.get_atom(results[0].atom_id);
@@ -114,7 +115,7 @@ describe('Procedure Framework', () => {
     });
 
     it('should create an error task on execution timeout', async () => {
-        const task = createTask('(execute "timeout")', TaskType.PROCEDURE);
+        const task = await createTask('(execute "timeout")', TaskType.PROCEDURE);
         const results = await execute_procedure(task, worldModel, handlers, {}, 10); // 10ms timeout
         expect(results.length).toBe(1);
         const errorAtom = worldModel.get_atom(results[0].atom_id);
@@ -123,7 +124,7 @@ describe('Procedure Framework', () => {
     });
 
     it('should handle missing handlers gracefully', async () => {
-        const task = createTask('(execute "unknown")', TaskType.PROCEDURE);
+        const task = await createTask('(execute "unknown")', TaskType.PROCEDURE);
         const results = await execute_procedure(task, worldModel, handlers, undefined);
         expect(results.length).toBe(0);
     });

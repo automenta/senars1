@@ -61,7 +61,7 @@ export function matchSExpressionPattern(
   bindings: Record<string, string>
 ): boolean {
   if (typeof patternSExpr === 'string') {
-    if (patternSExpr.startsWith('%')) {
+    if (patternSExpr.startsWith('$') || patternSExpr.startsWith('%')) {
       // It's a variable, bind it
       const varName = patternSExpr;
       if (bindings[varName] && bindings[varName] !== sExpressionToString(contentSExpr)) {
@@ -74,7 +74,17 @@ export function matchSExpressionPattern(
       return patternSExpr === contentSExpr;
     }
   } else if (typeof contentSExpr === 'string') {
-    return false; // Cannot match S-Expression pattern with a string content
+    // If the pattern is an S-expression but the content is a string, they can't match...
+    // UNLESS the pattern is a single variable, like ($P)
+    if (patternSExpr.args.length === 0 && patternSExpr.head.startsWith('$')) {
+        const varName = patternSExpr.head;
+        if (bindings[varName] && bindings[varName] !== contentSExpr) {
+            return false;
+        }
+        bindings[varName] = contentSExpr;
+        return true;
+    }
+    return false;
   } else {
     // Both are S-Expressions
     if (patternSExpr.head !== contentSExpr.head) {

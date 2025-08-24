@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { WorldModel } from '../../world-model';
 import { TestAnalysisSchema } from '../../schemas/test_analysis';
 import { MockResonanceStrategy, MockTruthPolicy } from '../world-model.test';
+import { InMemoryPatternMatcher } from '../../implementations';
 import { Task, SemanticAtom } from '../../models';
 import { TaskType } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,17 +15,17 @@ describe('TestAnalysisSchema', () => {
     beforeEach(() => {
         const resonanceStrategy = new MockResonanceStrategy();
         truthPolicy = new MockTruthPolicy();
-        worldModel = new WorldModel(resonanceStrategy, truthPolicy);
+        worldModel = new WorldModel(resonanceStrategy, truthPolicy, new InMemoryPatternMatcher());
         schema = new TestAnalysisSchema();
     });
 
-    it('should create a GOAL task to fix a failing test', () => {
+    it('should create a GOAL task to fix a failing test', async () => {
         const failure_atom: SemanticAtom = {
             id: uuidv4(),
             content: '(test_failure (file "/app/src/core/tests/fake.test.ts") (test "should fail") (message "Error: test failed"))',
             embedding: [],
         };
-        worldModel.add_atom(failure_atom);
+        await worldModel.add_atom(failure_atom);
 
         const failure_task: Task = {
             id: uuidv4(),
@@ -38,7 +39,7 @@ describe('TestAnalysisSchema', () => {
             },
         };
 
-        const new_tasks = schema.apply(failure_task, failure_task, truthPolicy, worldModel);
+        const new_tasks = await schema.apply(failure_task, failure_task, truthPolicy, worldModel);
 
         expect(new_tasks.length).toBe(1);
         const task = new_tasks[0];
