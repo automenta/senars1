@@ -9,7 +9,8 @@ import { is_schema_pattern } from './utils';
 
 export class WorldModel {
   private resonance: IResonanceStrategy;
-  private truth_policy: ITruthPolicy; 
+  private truth_policy: ITruthPolicy;
+  private schema_registry: SchemaRegistry;
   public atoms: Record<UUID, SemanticAtom> = {};
   public tasks: Record<UUID, Task> = {};
   public semantic_index: VectorDB;
@@ -17,9 +18,10 @@ export class WorldModel {
   public schema_index: PatternMatcher;
   private mutex: Mutex;
 
-  constructor(resonance: IResonanceStrategy, truth_policy: ITruthPolicy, schema_index?: PatternMatcher) {
+  constructor(resonance: IResonanceStrategy, truth_policy: ITruthPolicy, schema_registry: SchemaRegistry, schema_index?: PatternMatcher) {
     this.resonance = resonance;
     this.truth_policy = truth_policy;
+    this.schema_registry = schema_registry;
     this.semantic_index = new InMemoryVectorDB();
     this.symbolic_index = {}; // Initialize as empty object
     this.schema_index = schema_index || new InMemoryPatternMatcher();
@@ -74,19 +76,10 @@ export class WorldModel {
     return this.resonance.find_context(focus, this, k);
   }
 
-  find_schemas(task_a: Task, task_b: Task): ICognitiveSchema[] {
+  find_schemas(task_a: Task, task_b: Task): MatchResult[] {
     const atom_a = this.get_atom(task_a.atom_id);
     const atom_b = this.get_atom(task_b.atom_id);
-    const match_results = this.schema_index.match(atom_a.content, atom_b.content);
-
-    const schemas: ICognitiveSchema[] = [];
-    for (const result of match_results) {
-        const schema = SchemaRegistry.get(result.schema_id);
-        if (schema) {
-            schemas.push(schema);
-        }
-    }
-    return schemas;
+    return this.schema_index.match(atom_a.content, atom_b.content);
   }
 
   get_atom(atom_id: UUID): SemanticAtom {

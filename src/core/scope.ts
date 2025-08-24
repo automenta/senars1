@@ -131,7 +131,8 @@ export function resolveScopeBindings(
         }
       }
 
-      return Object.keys(bindings).length > 0 ? bindings : undefined;
+      // Return bindings, even if they only contain default values.
+      return bindings;
 
     } catch (e) {
       console.error("Error resolving scope bindings:", e);

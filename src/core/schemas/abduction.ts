@@ -12,7 +12,7 @@ export class AbductionSchema implements ICognitiveSchema {
   public readonly id: UUID = generate_uuid("abduction_schema");
 
   get_trigger_pattern(): TriggerPattern {
-    return ["(implies $P $Q)", "$Q"];
+    return ["(implies $P $Q)", "($Q)"];
   }
 
   private _derive(

@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { generate_embedding } from './core/utils';
 import { WorldModel } from './core/world-model';
-import { DefaultAttentionPolicy, DefaultTruthPolicy, DefaultResonanceStrategy, LLMHandler } from './core/implementations';
+import { DefaultAttentionPolicy, DefaultTruthPolicy, DefaultResonanceStrategy, LLMHandler, InMemoryPatternMatcher } from './core/implementations';
 import { Task, SemanticAtom } from './core/models';
 import { TaskType } from './core/types';
 import { ProcedureHandler } from './core/interfaces';
@@ -38,10 +38,13 @@ export class App {
     this.attention_policy = new DefaultAttentionPolicy();
     this.truth_policy = new DefaultTruthPolicy();
     this.resonance_strategy = new DefaultResonanceStrategy();
-    this.world_model = new WorldModel(this.resonance_strategy, this.truth_policy);
     this.agenda = new Agenda();
     this.procedure_handlers = {};
-    this.schema_registry = new SchemaRegistry(this.world_model.schema_index);
+
+    // Create the pattern matcher first, as it's a shared dependency
+    const pattern_matcher = new InMemoryPatternMatcher();
+    this.schema_registry = new SchemaRegistry(pattern_matcher);
+    this.world_model = new WorldModel(this.resonance_strategy, this.truth_policy, this.schema_registry, pattern_matcher);
 
     const llmHandler = new LLMHandler(this.config.llm);
     this.procedure_handlers[llmHandler.name()] = llmHandler;

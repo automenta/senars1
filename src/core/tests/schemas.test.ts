@@ -20,7 +20,7 @@ describe('DeductionSchema', () => {
   });
 
   it('should return the correct trigger pattern', () => {
-    expect(deductionSchema.get_trigger_pattern()).toEqual(['(implies $P $Q)', '$P']);
+    expect(deductionSchema.get_trigger_pattern()).toEqual(['(implies $P $Q)', '($P)']);
   });
 
   it('should apply the schema and derive a new belief', async () => {

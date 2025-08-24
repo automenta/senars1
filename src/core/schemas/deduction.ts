@@ -10,7 +10,7 @@ export class DeductionSchema implements ICognitiveSchema {
 
   get_trigger_pattern(): TriggerPattern {
     // Modus Ponens: If P implies Q, and P is true, then Q is true.
-    return ["(implies $P $Q)", "$P"];
+    return ["(implies $P $Q)", "($P)"];
   }
 
   private _derive(

@@ -39,24 +39,17 @@ export class CognitiveEngine {
 
     try {
       const task_a = await this.agenda.pop();
-      if (!task_a) return; // In case pop returns null/undefined
+      if (!task_a) return;
 
-      // Memorize beliefs first
       if (task_a.type === TaskType.BELIEF) {
         await this.world_model.add_task(task_a);
       }
 
       const context = this.world_model.find_resonant(task_a, 10);
 
-      this.last_scope_bindings = undefined;
-      this.last_scope_task = undefined;
-      if (context.length > 0) {
-        this.last_scope_bindings = resolveScopeBindings(task_a, context, this.world_model);
-        if (this.last_scope_bindings) {
-          this.last_scope_task = task_a;
-        }
-      }
-      const scope_bindings = this.last_scope_bindings;
+      const scope_bindings = resolveScopeBindings(task_a, context, this.world_model);
+      this.last_scope_bindings = scope_bindings;
+      this.last_scope_task = scope_bindings ? task_a : undefined;
 
       if (is_procedure_task(task_a, this.world_model)) {
         await this.handle_procedure_task(task_a, scope_bindings);
@@ -65,8 +58,6 @@ export class CognitiveEngine {
       }
     } catch (error) {
       console.error("Cognitive Engine Tick Error:", error);
-      // Depending on the desired behavior, we might want to re-queue the task
-      // or simply drop it to prevent an infinite error loop. For now, we log and continue.
     }
   }
 
@@ -109,19 +100,15 @@ export class CognitiveEngine {
 
       let derived: Task[] = [];
       if (scope_bindings) {
-        derived = schema.apply_with_bindings(
+        derived = await schema.apply_with_bindings(
           task_a, task_b, this.truth_policy, scope_bindings, this.world_model, match_result.bindings
         );
       } else {
-        derived = schema.apply(task_a, task_b, this.truth_policy, this.world_model, match_result.bindings);
+        derived = await schema.apply(task_a, task_b, this.truth_policy, this.world_model, match_result.bindings);
       }
 
       for (const new_task of derived) {
-        if (is_procedure_task(new_task, this.world_model)) {
-          await this.handle_procedure_task(new_task, scope_bindings);
-        } else {
-          this.enqueue_derived_task(new_task, task_a, task_b, schema.id, scope_bindings);
-        }
+        this.enqueue_derived_task(new_task, task_a, task_b, schema.id, scope_bindings);
       }
     }
   }
@@ -145,7 +132,6 @@ export class CognitiveEngine {
     const path_b = parent_b.stamp.path;
 
     if (path_a && path_b) {
-      // If both have paths, merge them (simple union, could be more sophisticated)
       base_path = Array.from(new Set([...path_a, ...path_b]));
     } else if (path_a) {
       base_path = path_a;
