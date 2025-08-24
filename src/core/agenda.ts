@@ -1,44 +1,93 @@
 import { Task } from './models';
-import { UUID } from './types';
+import PriorityQueueLib from 'ts-priority-queue';
+import { Mutex } from 'async-mutex';
 
-export interface AgendaItem {
-  task: Task;
-  priority: number;
-}
-
+/**
+ * A thread-safe priority queue for managing tasks.
+ * It uses a heap-based priority queue for efficiency and a mutex to ensure
+ * safe concurrent access from multiple worker threads.
+ */
 export class PriorityQueue {
-  private items: AgendaItem[] = [];
+  private queue: PriorityQueueLib<Task>;
+  private mutex = new Mutex();
 
-  push(task: Task): void {
-    // For now, priority is simply task.attention.priority
-    const newItem: AgendaItem = { task, priority: task.attention.priority };
-    this.items.push(newItem);
-    this.items.sort((a, b) => b.priority - a.priority); // Sort in descending order of priority
+  constructor() {
+    this.queue = new PriorityQueueLib({
+      // The comparator function orders tasks by priority in descending order.
+      // Higher priority values are processed first.
+      comparator: (a: Task, b: Task) => b.attention.priority - a.attention.priority,
+    });
   }
 
-  pop(): Task {
-    if (this.isEmpty()) {
-      throw new Error("Agenda is empty.");
+  /**
+   * Adds a task to the queue in a thread-safe manner.
+   * @param task The task to add.
+   */
+  async push(task: Task): Promise<void> {
+    const release = await this.mutex.acquire();
+    try {
+      this.queue.queue(task);
+    } finally {
+      release();
     }
-    const item = this.items.shift();
-    if (!item) {
-      throw new Error("Failed to pop item from Agenda.");
+  }
+
+  /**
+   * Removes and returns the highest-priority task from the queue in a thread-safe manner.
+   * @returns The highest-priority task.
+   * @throws {Error} if the queue is empty.
+   */
+  async pop(): Promise<Task> {
+    const release = await this.mutex.acquire();
+    try {
+      if (this.queue.length === 0) {
+        throw new Error("Agenda is empty.");
+      }
+      return this.queue.dequeue();
+    } finally {
+      release();
     }
-    return item.task;
   }
 
-  isEmpty(): boolean {
-    return this.items.length === 0;
-  }
-
-  size(): number {
-    return this.items.length;
-  }
-
-  peek(): Task | undefined {
-    if (this.isEmpty()) {
-      return undefined;
+  /**
+   * Checks if the queue is empty in a thread-safe manner.
+   * @returns True if the queue is empty, false otherwise.
+   */
+  async isEmpty(): Promise<boolean> {
+    const release = await this.mutex.acquire();
+    try {
+      return this.queue.length === 0;
+    } finally {
+      release();
     }
-    return this.items[0].task;
+  }
+
+  /**
+   * Returns the number of tasks in the queue in a thread-safe manner.
+   * @returns The number of tasks.
+   */
+  async size(): Promise<number> {
+    const release = await this.mutex.acquire();
+    try {
+      return this.queue.length;
+    } finally {
+      release();
+    }
+  }
+
+  /**
+   * Returns the highest-priority task without removing it from the queue, in a thread-safe manner.
+   * @returns The highest-priority task, or undefined if the queue is empty.
+   */
+  async peek(): Promise<Task | undefined> {
+    const release = await this.mutex.acquire();
+    try {
+      if (this.queue.length === 0) {
+        return undefined;
+      }
+      return this.queue.peek();
+    } finally {
+      release();
+    }
   }
 }

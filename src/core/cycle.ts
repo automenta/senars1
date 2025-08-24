@@ -20,23 +20,21 @@ export async function worker_loop(
   procedure_handlers: Record<string, ProcedureHandler>
 ): Promise<void> {
   while (true) {
-    if (agenda.isEmpty()) {
+    if (await agenda.isEmpty()) {
       // In a real system, this might involve waiting or sleeping
       await new Promise(resolve => setTimeout(resolve, 100)); // Wait for a short period
       continue;
     }
 
     // 1. SELECT highest priority task
-    const task_a = agenda.pop();
+    const task_a = await agenda.pop();
 
     // 2. RESONATE: Find context
+    // Note: find_resonant is synchronous. If it becomes async, it needs 'await'.
     const context = world_model.find_resonant(task_a, 10); // k=10 as per core.md example
 
     // 3. SCOPE RESOLUTION
-    let scope_bindings: Record<string, string> | undefined = undefined;
-    if (context.length > 0) {
-      scope_bindings = resolveScopeBindings(task_a, context[0], world_model);
-    }
+    const scope_bindings = resolveScopeBindings(task_a, context, world_model);
 
     // 4. PROCESS BASED ON TASK TYPE
     if (task_a.type === TaskType.PROCEDURE) {
@@ -53,7 +51,7 @@ export async function worker_loop(
           schema_id: task_a.stamp.schema_id, // Or a new schema ID if procedure itself is a schema
           scope_bindings: scope_bindings,
         };
-        agenda.push(result_task);
+        await agenda.push(result_task);
       }
       continue;
     }
@@ -63,13 +61,19 @@ export async function worker_loop(
       const schemas = world_model.find_schemas(task_a, task_b);
       for (const schema of schemas) {
         let derived: Task[] = [];
-        if (scope_bindings) {
-          derived = schema.apply_with_bindings(
-            task_a, task_b, truth_policy, scope_bindings, world_model
-          ); // Pass world_model
-        } else {
-          derived = schema.apply(task_a, task_b, truth_policy, world_model);
-        } // Pass world_model
+        try {
+          if (scope_bindings) {
+            derived = schema.apply_with_bindings(
+              task_a, task_b, truth_policy, scope_bindings, world_model
+            );
+          } else {
+            derived = schema.apply(task_a, task_b, truth_policy, world_model);
+          }
+        } catch (e) {
+            console.error(`Error applying schema ${schema.id}:`, e);
+            // Optionally, create an error task to record the failure
+            continue; // Move to the next schema
+        }
 
         // 6. INTEGRATE & ENQUEUE
         for (const new_task of derived) {
@@ -84,7 +88,7 @@ export async function worker_loop(
                 schema_id: schema.id,
                 scope_bindings: scope_bindings,
               };
-              agenda.push(proc_result_task);
+              await agenda.push(proc_result_task);
             }
             continue;
           }
@@ -104,7 +108,7 @@ export async function worker_loop(
             schema_id: schema.id,
             scope_bindings: scope_bindings,
           };
-          agenda.push(new_task);
+          await agenda.push(new_task);
         }
       }
     }

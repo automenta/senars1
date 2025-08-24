@@ -12,7 +12,24 @@ function generate_uuid(prefix: string = ''): UUID {
 
 export function is_procedure_task(task: Task, world_model: WorldModel): boolean {
   const atom = world_model.get_atom(task.atom_id);
-  return atom.content.includes('(execute');
+  try {
+    const s_expr = parseSExpression(atom.content);
+    // A procedure is an S-expression with 'execute' as its head.
+    // It can be nested, e.g. (GOAL (execute ...))
+    const find_execute = (expr: SExpression | string): boolean => {
+        if (typeof expr === 'string') {
+            return false;
+        }
+        if (expr.head === 'execute') {
+            return true;
+        }
+        return expr.args.some(find_execute);
+    };
+    return find_execute(s_expr);
+  } catch (e) {
+    // If parsing fails, it's not a well-formed procedure task.
+    return false;
+  }
 }
 
 export function extract_handler_name(content: string): string | undefined {

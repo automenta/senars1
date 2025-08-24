@@ -4,11 +4,42 @@ import { IResonanceStrategy, ITruthPolicy, VectorDB, PatternMatcher, ICognitiveS
 import { SchemaRegistry } from './schema-registry';
 import { InMemoryVectorDB, InMemoryPatternMatcher } from './implementations';
 
-// Placeholder for is_schema_pattern function
+/**
+ * Checks if a given content string conforms to the basic structure of a scope expression,
+ * which is used for atom-based schemas.
+ *
+ * A valid scope expression must:
+ * 1. Start with '{' and end with '}'.
+ * 2. Contain a variable declaration block '(...)'
+ * 3. The variable block must precede the first comma that separates the body.
+ *
+ * @param content The string content of a SemanticAtom.
+ * @returns True if the content is a potential schema pattern, false otherwise.
+ */
 function is_schema_pattern(content: string): boolean {
-  // A more robust placeholder: checks for a pattern that looks like a schema definition
-  // e.g., "{(%var), (pattern -> result)}"
-  return content.startsWith('{') && content.includes('->') && content.includes('(') && content.includes(')');
+  const trimmed_content = content.trim();
+
+  // 1. Must start with '{' and end with '}'
+  if (!trimmed_content.startsWith('{') || !trimmed_content.endsWith('}')) {
+    return false;
+  }
+
+  // 2. Must contain a variable declaration block '(...)'
+  const var_block_start = trimmed_content.indexOf('(');
+  const var_block_end = trimmed_content.indexOf(')');
+  if (var_block_start === -1 || var_block_end === -1 || var_block_start > var_block_end) {
+    return false;
+  }
+
+  // 3. The variable block must appear before the first comma that separates the body.
+  const body_separator = trimmed_content.indexOf(',');
+  if (body_separator === -1 || var_block_end > body_separator) {
+    // If there is no comma, it's not a valid scope with a body.
+    // If the ')' is after the first comma, the structure is wrong.
+    return false;
+  }
+
+  return true;
 }
 
 export class WorldModel {
@@ -43,15 +74,36 @@ export class WorldModel {
   }
 
   add_task(task: Task): void {
-    if (task.type === 'BELIEF') {
-      const existing = this.find_belief(task.atom_id);
-      if (existing) {
-        task.truth = this.truth_policy.revision(existing, task);
-        this.tasks[existing.id] = task; 
-      } else {
-        this.tasks[task.id] = task;
-      }
+    // Only BELIEF tasks are permanently stored in the WorldModel's task list.
+    // GOALs, QUESTIONs, etc., exist ephemerally in the Agenda.
+    if (task.type !== 'BELIEF') {
+      this.tasks[task.id] = task;
+      return;
+    }
+
+    const existing_belief = this.find_belief(task.atom_id);
+
+    if (existing_belief) {
+      // If a belief with the same content already exists, revise it.
+      const new_truth = this.truth_policy.revision(existing_belief, task);
+
+      // Update the existing belief with the new truth value.
+      existing_belief.truth = new_truth;
+
+      // Also boost the attention of the existing belief as it has been reinforced.
+      // A simple strategy is to take the max of the priority and durability.
+      existing_belief.attention.priority = Math.max(
+        existing_belief.attention.priority,
+        task.attention.priority
+      );
+      existing_belief.attention.durability = Math.max(
+        existing_belief.attention.durability,
+        task.attention.durability
+      );
+
+      // The incoming task is now discarded as its information has been integrated.
     } else {
+      // If no existing belief is found, add the new task.
       this.tasks[task.id] = task;
     }
   }

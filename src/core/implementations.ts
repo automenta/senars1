@@ -49,7 +49,7 @@ export class InMemoryVectorDB implements VectorDB {
 }
 
 // Helper for S-Expression pattern matching with variables
-function matchSExpressionPattern(
+export function matchSExpressionPattern(
   patternSExpr: SExpression | string,
   contentSExpr: SExpression | string,
   bindings: Record<string, string>
