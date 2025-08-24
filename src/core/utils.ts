@@ -35,3 +35,16 @@ export function generate_embedding(content: string, length: number = EMBEDDING_L
   if (mag === 0) return new Array(length).fill(0);
   return normalized_to_1.map(v => v / mag);
 }
+
+/**
+ * Checks if a string content represents a schema pattern.
+ * For now, we define a schema pattern as a string containing placeholders
+ * like $1, $2, %x, etc. This is a heuristic.
+ * @param content The string to check.
+ * @returns True if it's a schema pattern, false otherwise.
+ */
+export function is_schema_pattern(content: string): boolean {
+  // Matches variables like $1, $2, $anything, %x, %my_var
+  const schema_var_regex = /\$[\w\d]+|%\w+/;
+  return schema_var_regex.test(content);
+}

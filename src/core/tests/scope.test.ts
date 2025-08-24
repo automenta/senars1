@@ -114,6 +114,33 @@ describe('Scope Parsing and Resolution', () => {
       const bindings = resolveScopeBindings(scopeTask, [contextTask], worldModel);
       expect(bindings).toEqual({ '%item': 'car', '%color': 'blue' });
     });
+
+    it('should resolve bindings from a nested sub-expression in a context task', () => {
+        const scopeAtom: SemanticAtom = {
+          id: uuidv4(),
+          content: '{(%substance, %animal), (is_toxic %substance %animal)}',
+          embedding: [],
+        };
+        const contextAtom: SemanticAtom = {
+            id: uuidv4(),
+            content: '(implies (eats cat chocolate) (is_toxic chocolate cat))',
+            embedding: []
+        };
+        worldModel.add_atom(scopeAtom);
+        worldModel.add_atom(contextAtom);
+
+        const scopeTask: Task = {
+          id: uuidv4(), atom_id: scopeAtom.id, type: TaskType.GOAL,
+          attention: { priority: 1, durability: 1 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' }
+        };
+        const contextTask: Task = {
+            id: uuidv4(), atom_id: contextAtom.id, type: TaskType.BELIEF,
+            attention: { priority: 1, durability: 1 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' }
+        };
+
+        const bindings = resolveScopeBindings(scopeTask, [contextTask], worldModel);
+        expect(bindings).toEqual({ '%substance': 'chocolate', '%animal': 'cat' });
+      });
   });
 
   describe('substituteInContent', () => {

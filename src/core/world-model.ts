@@ -3,6 +3,7 @@ import { UUID, Vector } from './types';
 import { IResonanceStrategy, ITruthPolicy, VectorDB, PatternMatcher, ICognitiveSchema, MatchResult } from './interfaces';
 import { SchemaRegistry } from './schema-registry';
 import { InMemoryVectorDB, InMemoryPatternMatcher } from './implementations';
+import { is_schema_pattern } from './utils';
 
 
 export class WorldModel {
@@ -30,6 +31,13 @@ export class WorldModel {
       this.symbolic_index[atom.content] = [];
     }
     this.symbolic_index[atom.content].push(atom.id);
+
+    // Register schemas
+    if (is_schema_pattern(atom.content)) {
+      // Here, the atom's content itself is the trigger pattern.
+      // We associate this pattern with the atom's ID, which acts as the schema_id.
+      this.schema_index.add(atom.content, atom.id);
+    }
   }
 
   add_task(task: Task): void {
