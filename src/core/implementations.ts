@@ -61,7 +61,7 @@ export function matchSExpressionPattern(
   bindings: Record<string, string>
 ): boolean {
   if (typeof patternSExpr === 'string') {
-    if (patternSExpr.startsWith('$')) {
+    if (patternSExpr.startsWith('%')) {
       // It's a variable, bind it
       const varName = patternSExpr;
       if (bindings[varName] && bindings[varName] !== sExpressionToString(contentSExpr)) {
@@ -316,7 +316,7 @@ export class LLMHandler implements ProcedureHandler {
 
     // Substitute bindings into query
     for (const key in bindings) {
-        const placeholder = new RegExp(key.replace('$', '\\$'), 'g');
+        const placeholder = new RegExp(key.replace('%', '\\%'), 'g');
         query = query.replace(placeholder, bindings[key]);
     }
 

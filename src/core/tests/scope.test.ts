@@ -19,28 +19,28 @@ describe('Scope Parsing and Resolution', () => {
 
   describe('parseScopeVariables', () => {
     it('should parse simple variables', () => {
-      const varSection = '($x, $y)';
+      const varSection = '(%x, %y)';
       const result = parseScopeVariables(varSection);
       expect(result).toEqual([
-        { name: '$x', required: true, default: undefined },
-        { name: '$y', required: true, default: undefined },
+        { name: '%x', required: true, default: undefined },
+        { name: '%y', required: true, default: undefined },
       ]);
     });
 
     it('should parse variables with default values', () => {
-      const varSection = '($substance, $animal=cat)';
+      const varSection = '(%substance, %animal=cat)';
       const result = parseScopeVariables(varSection);
       expect(result).toEqual([
-        { name: '$substance', required: true, default: undefined },
-        { name: '$animal', required: false, default: 'cat' },
+        { name: '%substance', required: true, default: undefined },
+        { name: '%animal', required: false, default: 'cat' },
       ]);
     });
 
     it('should parse variables with quoted string defaults', () => {
-      const varSection = '($message="Hello World")';
+      const varSection = '(%message="Hello World")';
       const result = parseScopeVariables(varSection);
       expect(result).toEqual([
-        { name: '$message', required: false, default: '"Hello World"' },
+        { name: '%message', required: false, default: '"Hello World"' },
       ]);
     });
 
@@ -49,6 +49,11 @@ describe('Scope Parsing and Resolution', () => {
       const result = parseScopeVariables(varSection);
       expect(result).toEqual([]);
     });
+
+    it('should throw an error for invalid variable prefix', () => {
+        const varSection = '(x, %y)';
+        expect(() => parseScopeVariables(varSection)).toThrow("Invalid scope variable format: x. Must start with '%'.");
+      });
   });
 
 
@@ -56,7 +61,7 @@ describe('Scope Parsing and Resolution', () => {
     it('should resolve bindings from default values', () => {
       const scopeAtom: SemanticAtom = {
         id: uuidv4(),
-        content: '{($x=defaultX, $y=defaultY), (action $x $y)}',
+        content: '{(%x=defaultX, %y=defaultY), (action %x %y)}',
         embedding: [],
       };
       worldModel.add_atom(scopeAtom);
@@ -67,13 +72,13 @@ describe('Scope Parsing and Resolution', () => {
       };
 
       const bindings = resolveScopeBindings(taskA, [], worldModel);
-      expect(bindings).toEqual({ '$x': 'defaultX', '$y': 'defaultY' });
+      expect(bindings).toEqual({ '%x': 'defaultX', '%y': 'defaultY' });
     });
 
     it('should return undefined if required variables are missing', () => {
       const scopeAtom: SemanticAtom = {
         id: uuidv4(),
-        content: '{($requiredVar), (action $requiredVar)}',
+        content: '{(%requiredVar), (action %requiredVar)}',
         embedding: [],
       };
       worldModel.add_atom(scopeAtom);
@@ -90,7 +95,7 @@ describe('Scope Parsing and Resolution', () => {
     it('should resolve bindings from context tasks', () => {
       const scopeAtom: SemanticAtom = {
         id: uuidv4(),
-        content: '{($item, $color=red), (paint $item $color)}',
+        content: '{(%item, %color=red), (paint %item %color)}',
         embedding: [],
       };
       const contextAtom: SemanticAtom = { id: uuidv4(), content: '(paint car blue)', embedding: [] };
@@ -107,28 +112,28 @@ describe('Scope Parsing and Resolution', () => {
       };
 
       const bindings = resolveScopeBindings(scopeTask, [contextTask], worldModel);
-      expect(bindings).toEqual({ '$item': 'car', '$color': 'blue' });
+      expect(bindings).toEqual({ '%item': 'car', '%color': 'blue' });
     });
   });
 
   describe('substituteInContent', () => {
     it('should substitute variables in content', () => {
-      const content = '(is_toxic $substance $animal)';
-      const bindings = { '$substance': 'chocolate', '$animal': 'cat' };
+      const content = '(is_toxic %substance %animal)';
+      const bindings = { '%substance': 'chocolate', '%animal': 'cat' };
       const result = substituteInContent(content, bindings);
       expect(result).toBe('(is_toxic chocolate cat)');
     });
 
     it('should handle multiple occurrences of the same variable', () => {
-      const content = '(related $x $x)';
-      const bindings = { '$x': 'test' };
+      const content = '(related %x %x)';
+      const bindings = { '%x': 'test' };
       const result = substituteInContent(content, bindings);
       expect(result).toBe('(related test test)');
     });
 
     it('should handle no-op substitutions', () => {
       const content = '(no variables)';
-      const bindings = { '$a': 'b' };
+      const bindings = { '%a': 'b' };
       const result = substituteInContent(content, bindings);
       expect(result).toBe(content);
     });

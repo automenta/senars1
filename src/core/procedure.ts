@@ -56,8 +56,22 @@ export function is_procedure_task(task: Task, world_model: WorldModel): boolean 
 export function extract_handler_name(content: string): string | undefined {
   try {
     const sExpr = parseSExpression(content);
-    if (sExpr.head === 'execute' && sExpr.args.length > 0 && typeof sExpr.args[0] === 'string') {
-      return sExpr.args[0].replace(/"/g, ''); // Strip quotes
+
+    const findExecute = (expr: SExpression): SExpression | undefined => {
+        if (expr.head === 'execute') return expr;
+        for(const arg of expr.args) {
+            if(typeof arg !== 'string') {
+                const found = findExecute(arg);
+                if (found) return found;
+            }
+        }
+        return undefined;
+    };
+
+    const executeExpr = findExecute(sExpr);
+
+    if (executeExpr && executeExpr.args.length > 0 && typeof executeExpr.args[0] === 'string') {
+      return executeExpr.args[0].replace(/"/g, ''); // Strip quotes
     }
   } catch (e) {
     console.error("Error parsing S-Expression for handler name:", e);

@@ -37,27 +37,35 @@ export class CognitiveEngine {
   public async tick() {
     if (await this.agenda.isEmpty()) return;
 
-    const task_a = await this.agenda.pop();
-    const context = this.world_model.find_resonant(task_a, 10);
+    try {
+      const task_a = await this.agenda.pop();
+      if (!task_a) return; // In case pop returns null/undefined
 
-    this.last_scope_bindings = undefined;
-    this.last_scope_task = undefined;
-    if (context.length > 0) {
-      this.last_scope_bindings = resolveScopeBindings(task_a, context, this.world_model);
-      if (this.last_scope_bindings) {
-        this.last_scope_task = task_a;
+      const context = this.world_model.find_resonant(task_a, 10);
+
+      this.last_scope_bindings = undefined;
+      this.last_scope_task = undefined;
+      if (context.length > 0) {
+        this.last_scope_bindings = resolveScopeBindings(task_a, context, this.world_model);
+        if (this.last_scope_bindings) {
+          this.last_scope_task = task_a;
+        }
       }
-    }
-    const scope_bindings = this.last_scope_bindings;
+      const scope_bindings = this.last_scope_bindings;
 
-    if (task_a.type === TaskType.PROCEDURE) {
-      await this.handle_procedure_task(task_a, scope_bindings);
-    } else {
-      await this.handle_regular_task(task_a, context, scope_bindings);
-    }
+      if (is_procedure_task(task_a, this.world_model)) {
+        await this.handle_procedure_task(task_a, scope_bindings);
+      } else {
+        await this.handle_regular_task(task_a, context, scope_bindings);
+      }
 
-    if (task_a.type === TaskType.BELIEF) {
-      this.world_model.add_task(task_a);
+      if (task_a.type === TaskType.BELIEF) {
+        this.world_model.add_task(task_a);
+      }
+    } catch (error) {
+      console.error("Cognitive Engine Tick Error:", error);
+      // Depending on the desired behavior, we might want to re-queue the task
+      // or simply drop it to prevent an infinite error loop. For now, we log and continue.
     }
   }
 

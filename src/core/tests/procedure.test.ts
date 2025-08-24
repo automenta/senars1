@@ -1,50 +1,45 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { WorldModel } from '../world-model';
-import { execute_procedure } from '../procedure';
+import { execute_procedure, is_procedure_task, extract_handler_name } from '../procedure';
 import { ProcedureHandler } from '../interfaces';
-import { SemanticAtom, Task, TruthValue } from '../models';
-import { TaskType, UUID } from '../types';
+import { SemanticAtom, Task } from '../models';
+import { TaskType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { MockResonanceStrategy, MockTruthPolicy } from './world-model.test';
 
-// Make the mock classes available in this file
-export { MockResonanceStrategy, MockTruthPolicy };
-
-// Mock LLMHandler for testing purposes
-class MockLLMHandler implements ProcedureHandler {
-  name(): string {
-    return "llm";
-  }
-
-  can_handle(content: string): boolean {
-    return content.includes('(execute "llm"');
-  }
-
-  execute(content: string, bindings: Record<string, string>, world_model: WorldModel): Task[] {
-    const newAtom: SemanticAtom = {
+class MockSuccessHandler implements ProcedureHandler {
+  name = () => 'success';
+  can_handle = (content: string) => content.includes('success');
+  async execute(content: string, bindings: Record<string, string>, world_model: WorldModel): Promise<Task[]> {
+    const successAtom: SemanticAtom = { id: uuidv4(), content: '(result success)', embedding: [] };
+    world_model.add_atom(successAtom);
+    return [{
       id: uuidv4(),
-      content: '(search_result "test query" "test result")',
-      embedding: [],
-    };
-    world_model.add_atom(newAtom);
-
-    const newTask: Task = {
-      id: uuidv4(),
-      atom_id: newAtom.id,
+      atom_id: successAtom.id,
       type: TaskType.BELIEF,
-      truth: { frequency: 0.9, confidence: 0.9 },
-      attention: { priority: 0.8, durability: 0.8 },
-      stamp: {
-        timestamp: Date.now() / 1000,
-        parent_ids: [],
-        schema_id: 'mock-llm-handler-schema',
-      },
-    };
-    return [newTask];
+      attention: { priority: 1, durability: 1 },
+      stamp: { timestamp: 0, parent_ids: [], schema_id: '' },
+    }];
   }
 }
 
-describe('Procedure Execution', () => {
+class MockFailureHandler implements ProcedureHandler {
+  name = () => 'failure';
+  can_handle = (content: string) => content.includes('failure');
+  async execute(content: string, bindings: Record<string, string>, world_model: WorldModel): Promise<Task[]> {
+    throw new Error('Handler failed');
+  }
+}
+
+class MockTimeoutHandler implements ProcedureHandler {
+    name = () => 'timeout';
+    can_handle = (content: string) => content.includes('timeout');
+    async execute(content: string, bindings: Record<string, string>, world_model: WorldModel): Promise<Task[]> {
+      return new Promise(resolve => setTimeout(() => resolve([]), 100)); // Takes 100ms
+    }
+}
+
+describe('Procedure Framework', () => {
   let worldModel: WorldModel;
   let handlers: Record<string, ProcedureHandler>;
 
@@ -53,51 +48,84 @@ describe('Procedure Execution', () => {
     const truthPolicy = new MockTruthPolicy();
     worldModel = new WorldModel(resonanceStrategy, truthPolicy);
     handlers = {
-      'llm': new MockLLMHandler(),
+      'success': new MockSuccessHandler(),
+      'failure': new MockFailureHandler(),
+      'timeout': new MockTimeoutHandler(),
     };
   });
 
-  it('should execute a procedure task', async () => {
-    const atom: SemanticAtom = {
-      id: uuidv4(),
-      content: '(execute "llm" query:"test query")',
-      embedding: [],
-    };
+  const createTask = (content: string, type: TaskType = TaskType.GOAL): Task => {
+    const atom: SemanticAtom = { id: uuidv4(), content, embedding: [] };
     worldModel.add_atom(atom);
-
-    const task: Task = {
+    return {
       id: uuidv4(),
       atom_id: atom.id,
-      type: TaskType.PROCEDURE,
+      type,
       attention: { priority: 1, durability: 1 },
       stamp: { timestamp: 0, parent_ids: [], schema_id: '' },
     };
+  };
 
-    const results = await execute_procedure(task, worldModel, handlers, undefined);
-    expect(results.length).toBe(1);
-    const resultTask = results[0];
-    expect(resultTask.type).toBe(TaskType.BELIEF);
-    const resultAtom = worldModel.get_atom(resultTask.atom_id);
-    expect(resultAtom.content).toContain('search_result');
+  describe('is_procedure_task', () => {
+    it('should identify a simple procedure task', () => {
+      const task = createTask('(execute "success")', TaskType.PROCEDURE);
+      expect(is_procedure_task(task, worldModel)).toBe(true);
+    });
+
+    it('should identify a nested procedure task', () => {
+      const task = createTask('(GOAL (execute "success"))');
+      expect(is_procedure_task(task, worldModel)).toBe(true);
+    });
+
+    it('should return false for non-procedure tasks', () => {
+      const task = createTask('(do_something else)');
+      expect(is_procedure_task(task, worldModel)).toBe(false);
+    });
   });
 
-  it('should handle missing handlers', async () => {
-    const atom: SemanticAtom = {
-      id: uuidv4(),
-      content: '(execute "unknown" query:"test")',
-      embedding: [],
-    };
-    worldModel.add_atom(atom);
+  describe('extract_handler_name', () => {
+    it('should extract handler from simple procedure', () => {
+        const content = '(execute "success" query:"test")';
+        expect(extract_handler_name(content)).toBe('success');
+    });
 
-    const task: Task = {
-      id: uuidv4(),
-      atom_id: atom.id,
-      type: TaskType.PROCEDURE,
-      attention: { priority: 1, durability: 1 },
-      stamp: { timestamp: 0, parent_ids: [], schema_id: '' },
-    };
+    it('should extract handler from nested procedure', () => {
+        const content = '(GOAL (execute "failure" query:"test"))';
+        expect(extract_handler_name(content)).toBe('failure');
+    });
+  });
 
-    const results = await execute_procedure(task, worldModel, handlers, undefined);
-    expect(results.length).toBe(0);
+  describe('execute_procedure', () => {
+    it('should execute a successful handler and return result tasks', async () => {
+      const task = createTask('(execute "success")', TaskType.PROCEDURE);
+      const results = await execute_procedure(task, worldModel, handlers, {});
+      expect(results.length).toBe(1);
+      const resultAtom = worldModel.get_atom(results[0].atom_id);
+      expect(resultAtom.content).toBe('(result success)');
+    });
+
+    it('should create an error task when a handler fails', async () => {
+      const task = createTask('(execute "failure")', TaskType.PROCEDURE);
+      const results = await execute_procedure(task, worldModel, handlers, {});
+      expect(results.length).toBe(1);
+      const errorAtom = worldModel.get_atom(results[0].atom_id);
+      expect(errorAtom.content).toContain('(execution_error "failure"');
+      expect(errorAtom.content).toContain('Handler failed');
+    });
+
+    it('should create an error task on execution timeout', async () => {
+        const task = createTask('(execute "timeout")', TaskType.PROCEDURE);
+        const results = await execute_procedure(task, worldModel, handlers, {}, 10); // 10ms timeout
+        expect(results.length).toBe(1);
+        const errorAtom = worldModel.get_atom(results[0].atom_id);
+        expect(errorAtom.content).toContain('(execution_error "timeout"');
+        expect(errorAtom.content).toContain('timed out');
+    });
+
+    it('should handle missing handlers gracefully', async () => {
+        const task = createTask('(execute "unknown")', TaskType.PROCEDURE);
+        const results = await execute_procedure(task, worldModel, handlers, undefined);
+        expect(results.length).toBe(0);
+    });
   });
 });

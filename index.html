@@ -43,7 +43,38 @@
       <footer>
         <div id="attention-metrics">
           <h3>📊 ATTENTION METRICS</h3>
-          <p>Focus: <span id="focus-metric">N/A</span> | Memory: <span id="memory-metric">N/A</span> | Energy: <span id="energy-metric">N/A</span></p>
+          <div class="metric-grid">
+            <div class="metric-item">
+              <strong>Focus Level:</strong> <span id="focus-metric">N/A</span>
+            </div>
+            <div class="metric-item">
+              <strong>Active Thoughts:</strong> <span id="active-thoughts-metric">N/A</span>
+            </div>
+            <div class="metric-item">
+              <strong>Memory Items:</strong> <span id="memory-metric">N/A</span>
+            </div>
+            <div class="metric-item">
+              <strong>Energy Trend:</strong> <span id="energy-trend-metric">N/A</span>
+            </div>
+          </div>
+          <div id="priority-distribution">
+            <h4>Priority Distribution</h4>
+            <div class="bar-container">
+              <span class="bar-label">HIGH</span>
+              <div class="bar" id="high-priority-bar"></div>
+              <span class="bar-value" id="high-priority-value"></span>
+            </div>
+            <div class="bar-container">
+              <span class="bar-label">MED</span>
+              <div class="bar" id="med-priority-bar"></div>
+              <span class="bar-value" id="med-priority-value"></span>
+            </div>
+            <div class="bar-container">
+              <span class="bar-label">LOW</span>
+              <div class="bar" id="low-priority-bar"></div>
+              <span class="bar-value" id="low-priority-value"></span>
+            </div>
+          </div>
         </div>
       </footer>
     </div>

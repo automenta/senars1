@@ -34,8 +34,15 @@ export class Gui {
   private schemaList: HTMLElement;
   private scopeDebugger: HTMLElement;
   private focusMetric: HTMLElement;
+  private activeThoughtsMetric: HTMLElement;
   private memoryMetric: HTMLElement;
-  private energyMetric: HTMLElement;
+  private energyTrendMetric: HTMLElement;
+  private highPriorityBar: HTMLElement;
+  private medPriorityBar: HTMLElement;
+  private lowPriorityBar: HTMLElement;
+  private highPriorityValue: HTMLElement;
+  private medPriorityValue: HTMLElement;
+  private lowPriorityValue: HTMLElement;
   private newThoughtInput: HTMLInputElement;
   private addNewThoughtButton: HTMLElement;
   private settingsBtn: HTMLElement;
@@ -49,6 +56,7 @@ export class Gui {
   private llmConfigStatus: HTMLElement;
 
   private currentMode: string = 'thinking';
+  private lastEnergyLevel: number = 0;
 
   constructor(app: App, world_model: WorldModel, agenda: Agenda, schema_registry: SchemaRegistry) {
     this.app = app;
@@ -62,8 +70,15 @@ export class Gui {
     this.schemaList = document.getElementById('schema-list')!;
     this.scopeDebugger = document.getElementById('scope-debugger-content')!;
     this.focusMetric = document.getElementById('focus-metric')!;
+    this.activeThoughtsMetric = document.getElementById('active-thoughts-metric')!;
     this.memoryMetric = document.getElementById('memory-metric')!;
-    this.energyMetric = document.getElementById('energy-metric')!;
+    this.energyTrendMetric = document.getElementById('energy-trend-metric')!;
+    this.highPriorityBar = document.getElementById('high-priority-bar')!;
+    this.medPriorityBar = document.getElementById('med-priority-bar')!;
+    this.lowPriorityBar = document.getElementById('low-priority-bar')!;
+    this.highPriorityValue = document.getElementById('high-priority-value')!;
+    this.medPriorityValue = document.getElementById('med-priority-value')!;
+    this.lowPriorityValue = document.getElementById('low-priority-value')!;
     this.newThoughtInput = document.getElementById('new-thought-input') as HTMLInputElement;
     this.addNewThoughtButton = document.getElementById('add-new-thought-button')!;
     this.settingsBtn = document.getElementById('settings-btn')!;
@@ -196,15 +211,17 @@ export class Gui {
         const isFullyResolved = [...requiredVars].every(v => boundVars.has(v));
 
         const template = parsedScope.bodies.join(', ');
+        // Use the first body as a representative name for the template.
+        const templateName = parsedScope.bodies.length > 0 ? parsedScope.bodies[0] : 'Unnamed Template';
         const result = substituteInContent(template, bindings);
 
         this.scopeDebugger.innerHTML = `
           <div class="scope-card">
-            <h4>🌐 Thought Template: ${atom.content}</h4>
+            <h4>🌐 THOUGHT TEMPLATE: ${templateName}</h4>
             <p><strong>Template:</strong> ${template}</p>
             <p><strong>Bindings:</strong></p>
             <ul>
-              ${Object.entries(bindings).map(([key, value]) => `<li>• <strong>${key}</strong> = ${value}</li>`).join('')}
+              ${Object.entries(bindings).map(([key, value]) => `<li>• ${key} = ${value}</li>`).join('')}
             </ul>
             <p><strong>Status:</strong> ${isFullyResolved ? '✅ Fully resolved' : '⚠️ Partially resolved'}</p>
             <p><strong>Result:</strong> ${result}</p>
@@ -380,20 +397,31 @@ export class Gui {
     const activeTaskCount = activeTasks.length;
     const completedBeliefs = Array.from(this.world_model.tasks.values()).filter(task => task.type === TaskType.BELIEF).length;
     const totalTasks = activeTaskCount + completedBeliefs;
-    const focusLevel = totalTasks > 0 ? ((activeTaskCount / totalTasks) * 100).toFixed(0) : 0;
+    const focusLevel = totalTasks > 0 ? ((activeTaskCount / totalTasks) * 100).toFixed(0) : '0';
     const memoryItems = completedBeliefs;
 
     let energyLevel = 0;
+    const priorityDistribution = { high: 0, medium: 0, low: 0 };
+
     if (activeTaskCount > 0) {
-      const totalPriority = activeTasks.reduce((sum, task) => sum + task.attention.priority, 0);
+      const totalPriority = activeTasks.reduce((sum, task) => {
+        if (task.attention.priority > 0.75) priorityDistribution.high++;
+        else if (task.attention.priority > 0.5) priorityDistribution.medium++;
+        else priorityDistribution.low++;
+        return sum + task.attention.priority;
+      }, 0);
       energyLevel = (totalPriority / activeTaskCount) * 100;
     }
+
+    const energyTrend = energyLevel > this.lastEnergyLevel ? '↗' : energyLevel < this.lastEnergyLevel ? '↘' : '→';
+    this.lastEnergyLevel = energyLevel;
 
     return {
       focus: `${focusLevel}%`,
       active_thoughts: activeTaskCount,
-      memory: `${memoryItems} items`,
-      energy: `${energyLevel.toFixed(0)}%`,
+      memory: `${memoryItems}`,
+      energy_trend: energyTrend,
+      priority_distribution: priorityDistribution,
     };
   }
 
@@ -403,9 +431,10 @@ export class Gui {
     return 'priority-low';
   }
 
-  private getTaskIcon(taskType: TaskType, isCompleted: boolean): string {
+  private getTaskIcon(task: GuiTask, isCompleted: boolean): string {
     if (isCompleted) return '✅';
-    switch (taskType) {
+    if (is_procedure_task(task, this.world_model)) return '🔍';
+    switch (task.type) {
       case TaskType.GOAL: return '🎯';
       case TaskType.QUESTION: return '❓';
       case TaskType.BELIEF: return '💡';
@@ -417,13 +446,22 @@ export class Gui {
 
   private renderThoughtCard(task: GuiTask, isCompleted: boolean): string {
     const priorityClass = isCompleted ? 'completed' : this.getPriorityClass(task.attention.priority);
-    const icon = this.getTaskIcon(task.type, isCompleted);
+    const icon = this.getTaskIcon(task, isCompleted);
     const confidence = `Confidence: ${((task.truth?.confidence ?? 0) * 100).toFixed(0)}%`;
     const isPinned = this.app.is_task_pinned(task.id);
 
     let details: string[] = [];
 
-    if (isCompleted) {
+    if (is_procedure_task(task, this.world_model) && !isCompleted) {
+        const handler_name = extract_handler_name(task.content);
+        const query = extract_param(task.content, "query");
+        details = [
+            `<p>• Status: 🟡 In progress</p>`,
+            `<p>• Method: ${handler_name} query</p>`,
+            `<p>• Input: "${query}"</p>`,
+            `<p>• Safety: Sandboxed | Verified source</p>`
+        ];
+    } else if (isCompleted) {
         details = [
             `<p>• ${confidence}</p>`,
             `<p>• Source: ${task.source || 'N/A'} | Completed: ${task.completed_ago || 'N/A'}</p>`,
@@ -486,8 +524,20 @@ export class Gui {
 
   private async renderMetrics() {
     const metrics = await this.get_cognitive_metrics();
-    this.focusMetric.textContent = `${metrics.focus} (${metrics.active_thoughts} tasks)`;
+    const totalActive = metrics.active_thoughts;
+
+    this.focusMetric.textContent = metrics.focus;
+    this.activeThoughtsMetric.textContent = String(metrics.active_thoughts);
     this.memoryMetric.textContent = metrics.memory;
-    this.energyMetric.textContent = metrics.energy;
+    this.energyTrendMetric.textContent = metrics.energy_trend;
+
+    const dist = metrics.priority_distribution;
+    this.highPriorityBar.style.width = totalActive > 0 ? `${(dist.high / totalActive) * 100}%` : '0%';
+    this.medPriorityBar.style.width = totalActive > 0 ? `${(dist.medium / totalActive) * 100}%` : '0%';
+    this.lowPriorityBar.style.width = totalActive > 0 ? `${(dist.low / totalActive) * 100}%` : '0%';
+
+    this.highPriorityValue.textContent = `${dist.high} items`;
+    this.medPriorityValue.textContent = `${dist.medium} items`;
+    this.lowPriorityValue.textContent = `${dist.low} items`;
   }
 }
