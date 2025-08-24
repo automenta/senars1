@@ -28,6 +28,7 @@ export class Gui {
   private schema_registry: SchemaRegistry;
   private app: App;
 
+  // DOM Elements
   private activeThoughtsList: HTMLElement;
   private completedThoughtsList: HTMLElement;
   private schemaList: HTMLElement;
@@ -42,6 +43,11 @@ export class Gui {
   private closeModalBtn: HTMLElement;
   private userModeSelect: HTMLSelectElement;
   private container: HTMLElement;
+  private llmApiKeyInput: HTMLInputElement;
+  private llmModelNameInput: HTMLInputElement;
+  private saveLlmConfigBtn: HTMLElement;
+  private llmConfigStatus: HTMLElement;
+
   private currentMode: string = 'thinking';
 
   constructor(app: App, world_model: WorldModel, agenda: Agenda, schema_registry: SchemaRegistry) {
@@ -50,6 +56,7 @@ export class Gui {
     this.agenda = agenda;
     this.schema_registry = schema_registry;
 
+    // Cache all DOM element selections
     this.activeThoughtsList = document.getElementById('active-thoughts-list')!;
     this.completedThoughtsList = document.getElementById('completed-thoughts-list')!;
     this.schemaList = document.getElementById('schema-list')!;
@@ -64,10 +71,19 @@ export class Gui {
     this.closeModalBtn = this.settingsModal.querySelector('.close-btn')!;
     this.userModeSelect = document.getElementById('user-mode-select') as HTMLSelectElement;
     this.container = document.querySelector('.container')!;
+    this.llmApiKeyInput = document.getElementById('llm-api-key') as HTMLInputElement;
+    this.llmModelNameInput = document.getElementById('llm-model-name') as HTMLInputElement;
+    this.saveLlmConfigBtn = document.getElementById('save-llm-config-btn')!;
+    this.llmConfigStatus = document.getElementById('llm-config-status')!;
   }
 
   public async init() {
+    this.load_llm_config();
+    this.attach_event_listeners();
     await this.render();
+  }
+
+  private attach_event_listeners() {
     this.addNewThoughtButton.addEventListener('click', async () => {
       const content = this.newThoughtInput.value.trim();
       if (content) {
@@ -97,6 +113,58 @@ export class Gui {
       this.container.dataset.mode = this.currentMode;
       await this.render();
     });
+
+    this.saveLlmConfigBtn.addEventListener('click', () => {
+        this.save_llm_config();
+    });
+
+    window.addEventListener('keydown', async (event) => {
+      const activeCard = document.querySelector('.thought-card.active-card') as HTMLElement;
+      if (!activeCard) return;
+
+      const taskId = activeCard.dataset.taskId;
+      if (!taskId) return;
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        await this.app.boost_task(taskId);
+        await this.render();
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        await this.app.reduce_task_priority(taskId);
+        await this.render();
+      }
+    });
+  }
+
+  private load_llm_config() {
+      const configStr = localStorage.getItem('llmConfig');
+      if (configStr) {
+          const config = JSON.parse(configStr);
+          this.llmApiKeyInput.value = config.apiKey || '';
+          this.llmModelNameInput.value = config.modelName || '';
+          this.app.update_llm_config(config);
+          this.llmConfigStatus.textContent = 'Loaded saved configuration.';
+      }
+  }
+
+  private save_llm_config() {
+      const config = {
+          apiKey: this.llmApiKeyInput.value,
+          modelName: this.llmModelNameInput.value
+      };
+      if (!config.apiKey || !config.modelName) {
+          this.llmConfigStatus.textContent = 'API Key and Model Name are required.';
+          this.llmConfigStatus.style.color = 'red';
+          return;
+      }
+      localStorage.setItem('llmConfig', JSON.stringify(config));
+      this.app.update_llm_config(config);
+      this.llmConfigStatus.textContent = 'Configuration saved!';
+      this.llmConfigStatus.style.color = 'green';
+      setTimeout(() => {
+        this.llmConfigStatus.textContent = '';
+      }, 3000);
   }
 
   public async render() {
@@ -156,7 +224,7 @@ export class Gui {
     this.schemaList.innerHTML = schemas.map(schema => `
       <div class="schema-card">
         <h4>${schema.constructor.name}</h4>
-        <p><strong>Trigger:</strong> <code>${schema.get_trigger_pattern()}</code></p>
+        <p><strong>Trigger:</strong> <code>${JSON.stringify(schema.get_trigger_pattern())}</code></p>
         <p><strong>Status:</strong> ACTIVE</p>
       </div>
     `).join('');
@@ -210,6 +278,15 @@ export class Gui {
       hammer.on('swipeleft', async () => {
         await this.app.reduce_task_priority(taskId);
         await this.render();
+      });
+
+      card.addEventListener('mouseenter', () => {
+        document.querySelectorAll('.thought-card.active-card').forEach(c => c.classList.remove('active-card'));
+        card.classList.add('active-card');
+      });
+
+      card.addEventListener('mouseleave', () => {
+        card.classList.remove('active-card');
       });
     });
   }

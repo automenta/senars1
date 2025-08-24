@@ -19,7 +19,7 @@ describe('DeductionSchema', () => {
   });
 
   it('should return the correct trigger pattern', () => {
-    expect(deductionSchema.get_trigger_pattern()).toBe('(implies $PREMISE $CONCLUSION)');
+    expect(deductionSchema.get_trigger_pattern()).toEqual(['(implies $P $Q)', '$P']);
   });
 
   it('should apply the schema and derive a new belief', () => {
@@ -30,7 +30,7 @@ describe('DeductionSchema', () => {
     };
     const implicationAtom: SemanticAtom = {
       id: "implication_atom_id",
-      content: '(implies (eats $1 $2) (is_sick $1))',
+      content: '(implies (eats cat chocolate) (is_sick cat))',
       embedding: [],
     };
     worldModel.add_atom(premiseAtom);
@@ -53,7 +53,8 @@ describe('DeductionSchema', () => {
       stamp: { timestamp: 0, parent_ids: [], schema_id: '' },
     };
 
-    const derivedTasks = deductionSchema.apply(taskA, taskB, mockTruthPolicy, worldModel);
+    const pattern_bindings = { '$P': '(eats cat chocolate)', '$Q': '(is_sick cat)' };
+    const derivedTasks = deductionSchema.apply(taskA, taskB, mockTruthPolicy, worldModel, pattern_bindings);
 
     expect(derivedTasks.length).toBe(1);
     const derivedTask = derivedTasks[0];
@@ -72,7 +73,7 @@ describe('DeductionSchema', () => {
     };
     const implicationAtom: SemanticAtom = {
       id: "implication_atom_id",
-      content: '(implies (eats $1 $2) (is_sick %who))', // Using a scope variable
+      content: '(implies (eats cat chocolate) (is_sick %who))', // Using a scope variable
       embedding: [],
     };
     worldModel.add_atom(premiseAtom);
@@ -94,9 +95,11 @@ describe('DeductionSchema', () => {
       attention: { priority: 0.8, durability: 0.7 },
       stamp: { timestamp: 0, parent_ids: [], schema_id: '' },
     };
-    const bindings = { '%who': 'cat' };
+    const scope_bindings = { '%who': 'cat' };
+    const pattern_bindings = { '$P': '(eats cat chocolate)', '$Q': '(is_sick %who)' };
 
-    const derivedTasks = deductionSchema.apply_with_bindings(taskA, taskB, mockTruthPolicy, bindings, worldModel);
+
+    const derivedTasks = deductionSchema.apply_with_bindings(taskA, taskB, mockTruthPolicy, scope_bindings, worldModel, pattern_bindings);
 
     expect(derivedTasks.length).toBe(1);
     const derivedTask = derivedTasks[0];

@@ -28,7 +28,8 @@ describe('AbductionSchema', () => {
     const taskA: Task = { id: uuidv4(), atom_id: implicationAtom.id, type: TaskType.BELIEF, truth: { frequency: 1.0, confidence: 1.0 }, attention: { priority: 1, durability: 1 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' } };
     const taskB: Task = { id: uuidv4(), atom_id: conclusionAtom.id, type: TaskType.BELIEF, truth: { frequency: 0.8, confidence: 0.7 }, attention: { priority: 0.8, durability: 0.7 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' } };
 
-    const derivedTasks = abductionSchema.apply(taskA, taskB, mockTruthPolicy, worldModel);
+    const pattern_bindings = { '$P': '(eats cat chocolate)', '$Q': '(is_sick cat)' };
+    const derivedTasks = abductionSchema.apply(taskA, taskB, mockTruthPolicy, worldModel, pattern_bindings);
 
     expect(derivedTasks.length).toBe(1);
     const derivedAtom = worldModel.get_atom(derivedTasks[0].atom_id);

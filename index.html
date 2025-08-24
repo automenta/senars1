@@ -61,6 +61,18 @@
             <option value="debugger">Debugger Mode</option>
           </select>
         </div>
+        <hr/>
+        <h3>LLM Configuration</h3>
+        <div class="setting">
+            <label for="llm-api-key">API Key:</label>
+            <input type="password" id="llm-api-key" placeholder="Your API Key">
+        </div>
+        <div class="setting">
+            <label for="llm-model-name">Model Name:</label>
+            <input type="text" id="llm-model-name" placeholder="e.g., gpt-4">
+        </div>
+        <button id="save-llm-config-btn">Save</button>
+        <p id="llm-config-status"></p>
       </div>
     </div>
 

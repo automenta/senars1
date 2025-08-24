@@ -119,20 +119,14 @@ export async function execute_procedure(
     return [];
   }
 
-  const execution_promise = new Promise<Task[]>((resolve, reject) => {
-    try {
-      const result = handlers[handler_name].execute(content, bindings || {}, world_model);
-      resolve(result);
-    } catch (e) {
-      reject(e);
-    }
-  });
-
-  const timeout_promise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`Execution timed out after ${timeout_ms}ms`)), timeout_ms)
-  );
-
   try {
+    // Directly await the handler's execution, which might be async
+    const execution_promise = handlers[handler_name].execute(content, bindings || {}, world_model);
+
+    const timeout_promise = new Promise<Task[]>((_, reject) =>
+      setTimeout(() => reject(new Error(`Execution timed out after ${timeout_ms}ms`)), timeout_ms)
+    );
+
     return await Promise.race([execution_promise, timeout_promise]);
   } catch (e: any) {
     return create_error_task(e, handler_name, task.id, world_model);

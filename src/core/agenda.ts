@@ -1,16 +1,20 @@
 import { Task } from './models';
 import PriorityQueueLib from 'ts-priority-queue';
 import { Mutex } from 'async-mutex';
+import { IAttentionPolicy } from './interfaces';
 
 export class Agenda {
   private queue: PriorityQueueLib<Task>;
   private tasks_map: Map<string, Task> = new Map();
   private mutex = new Mutex();
+  private last_decay_timestamp: number;
+  private pinned_tasks: Set<string> = new Set();
 
   constructor() {
     this.queue = new PriorityQueueLib({
       comparator: (a: Task, b: Task) => b.attention.priority - a.attention.priority,
     });
+    this.last_decay_timestamp = Date.now() / 1000;
   }
 
   async push(task: Task): Promise<void> {
@@ -95,6 +99,46 @@ export class Agenda {
     } finally {
       release();
     }
+  }
+
+  async decay(attention_policy: IAttentionPolicy): Promise<void> {
+    const release = await this.mutex.acquire();
+    try {
+      const now = Date.now() / 1000;
+      const elapsed = now - this.last_decay_timestamp;
+      if (elapsed <= 0) return;
+
+      const tasksToRebuild: Task[] = [];
+      for (const task of this.tasks_map.values()) {
+        if (!this.is_task_pinned(task.id)) {
+            task.attention = attention_policy.decay(task, elapsed);
+        }
+        tasksToRebuild.push(task);
+      }
+
+      // Rebuild the priority queue
+      const newQueue = new PriorityQueueLib({
+        comparator: (a: Task, b: Task) => b.attention.priority - a.attention.priority,
+      });
+      tasksToRebuild.forEach(t => newQueue.queue(t));
+      this.queue = newQueue;
+
+      this.last_decay_timestamp = now;
+    } finally {
+      release();
+    }
+  }
+
+  pin_task(taskId: string) {
+    if (this.pinned_tasks.has(taskId)) {
+      this.pinned_tasks.delete(taskId);
+    } else {
+      this.pinned_tasks.add(taskId);
+    }
+  }
+
+  is_task_pinned(taskId: string): boolean {
+    return this.pinned_tasks.has(taskId);
   }
 
   async get_all_tasks(): Promise<Task[]> {

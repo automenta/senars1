@@ -1,25 +1,9 @@
 import { SemanticAtom, Task, TruthValue } from './models';
 import { UUID, Vector } from './types';
-import { IResonanceStrategy, ITruthPolicy, VectorDB, PatternMatcher, ICognitiveSchema } from './interfaces';
+import { IResonanceStrategy, ITruthPolicy, VectorDB, PatternMatcher, ICognitiveSchema, MatchResult } from './interfaces';
 import { SchemaRegistry } from './schema-registry';
 import { InMemoryVectorDB, InMemoryPatternMatcher } from './implementations';
 
-function is_schema_pattern(content: string): boolean {
-  const trimmed = content.trim();
-  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
-    return false;
-  }
-  const var_start = trimmed.indexOf('(');
-  const var_end = trimmed.indexOf(')');
-  if (var_start === -1 || var_end === -1 || var_start > var_end) {
-    return false;
-  }
-  const body_separator = trimmed.indexOf(',');
-  if (body_separator === -1 || var_end > body_separator) {
-    return false;
-  }
-  return true;
-}
 
 export class WorldModel {
   private resonance: IResonanceStrategy;
@@ -46,10 +30,6 @@ export class WorldModel {
       this.symbolic_index[atom.content] = [];
     }
     this.symbolic_index[atom.content].push(atom.id);
-
-    if (is_schema_pattern(atom.content)) {
-      this.schema_index.add(atom.content, atom.id);
-    }
   }
 
   add_task(task: Task): void {
@@ -77,12 +57,10 @@ export class WorldModel {
     return this.resonance.find_context(focus, this, k);
   }
 
-  find_schemas(task_a: Task, task_b: Task): ICognitiveSchema[] {
+  find_schemas(task_a: Task, task_b: Task): MatchResult[] {
     const atom_a = this.get_atom(task_a.atom_id);
     const atom_b = this.get_atom(task_b.atom_id);
-    const schema_ids = this.schema_index.match(atom_a.content, atom_b.content);
-    const schemaRegistry = SchemaRegistry.getInstance();
-    return schema_ids.map(schema_id => schemaRegistry.get(schema_id)).filter(s => s !== undefined) as ICognitiveSchema[];
+    return this.schema_index.match(atom_a.content, atom_b.content);
   }
 
   get_atom(atom_id: UUID): SemanticAtom {
@@ -129,8 +107,8 @@ export class WorldModel {
             delete this.symbolic_index[atom.content];
           }
         }
-        // remove from semantic index needs implementation in VectorDB
-        // this.semantic_index.remove(atom.id);
+        // remove from semantic index
+        this.semantic_index.remove(atom.id);
 
         delete this.atoms[atom_id_to_remove];
       }

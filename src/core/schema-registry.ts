@@ -1,21 +1,21 @@
 import { UUID } from './types';
-import { ICognitiveSchema } from './interfaces';
+import { ICognitiveSchema, PatternMatcher } from './interfaces';
 
 export class SchemaRegistry {
-  private static instance: SchemaRegistry;
   private schemas: Record<UUID, ICognitiveSchema> = {};
+  private pattern_matcher: PatternMatcher;
 
-  private constructor() {}
-
-  public static getInstance(): SchemaRegistry {
-    if (!SchemaRegistry.instance) {
-      SchemaRegistry.instance = new SchemaRegistry();
-    }
-    return SchemaRegistry.instance;
+  constructor(pattern_matcher: PatternMatcher) {
+    this.pattern_matcher = pattern_matcher;
   }
 
   register(schema: ICognitiveSchema): void {
+    if (this.schemas[schema.id]) {
+        console.warn(`Schema with ID ${schema.id} is already registered.`);
+        return;
+    }
     this.schemas[schema.id] = schema;
+    this.pattern_matcher.add(schema.get_trigger_pattern(), schema.id);
   }
 
   get(schema_id: UUID): ICognitiveSchema | undefined {

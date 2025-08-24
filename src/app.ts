@@ -1,18 +1,17 @@
 import { v4 as uuidv4 } from 'uuid';
 import { generate_embedding } from './core/utils';
 import { WorldModel } from './core/world-model';
-import { DefaultAttentionPolicy, DefaultTruthPolicy, DefaultResonanceStrategy, LLMHandler } from './core/implementations';
+import { DefaultAttentionPolicy, DefaultTruthPolicy, DefaultResonanceStrategy, LLMHandler, LLMConfig } from './core/implementations';
 import { Task, SemanticAtom } from './core/models';
 import { TaskType } from './core/types';
 import { ProcedureHandler } from './core/interfaces';
 import { Agenda } from './core/agenda';
-import { resolveScopeBindings } from './core/scope';
-import { is_procedure_task, execute_procedure } from './core/procedure';
 import { SchemaRegistry } from './core/schema-registry';
 import { DeductionSchema } from './core/schemas';
 import { AbductionSchema } from './core/schemas/abduction';
 import { InductionSchema } from './core/schemas/induction';
 import { seed_data } from './core/seed';
+import { CognitiveEngine } from './core/engine'; // Import the new engine
 
 export class App {
   world_model: WorldModel;
@@ -22,24 +21,39 @@ export class App {
   private truth_policy: DefaultTruthPolicy;
   private resonance_strategy: DefaultResonanceStrategy;
   private procedure_handlers: Record<string, ProcedureHandler>;
-  private pinned_tasks: Set<string>;
-  public last_scope_bindings: Record<string, string> | undefined;
-  public last_scope_task: Task | undefined;
+  private engine: CognitiveEngine; // Add the engine instance
+
+  // GUI can access these via getters
+  public get last_scope_bindings(): Record<string, string> | undefined {
+    return this.engine.last_scope_bindings;
+  }
+  public get last_scope_task(): Task | undefined {
+    return this.engine.last_scope_task;
+  }
 
   constructor(seedData: boolean = true) {
-    this.pinned_tasks = new Set();
-    this.last_scope_bindings = undefined;
-    this.last_scope_task = undefined;
     this.attention_policy = new DefaultAttentionPolicy();
     this.truth_policy = new DefaultTruthPolicy();
     this.resonance_strategy = new DefaultResonanceStrategy();
     this.world_model = new WorldModel(this.resonance_strategy, this.truth_policy);
     this.agenda = new Agenda();
     this.procedure_handlers = {};
-    this.schema_registry = SchemaRegistry.getInstance();
+    this.schema_registry = new SchemaRegistry(this.world_model.schema_index);
 
-    const llmHandler = new LLMHandler();
+    // Placeholder for file-based config loading in Node.js
+    // const fileConfig = this.load_config_from_file_system();
+
+    const llmHandler = new LLMHandler(); // Pass fileConfig here
     this.procedure_handlers[llmHandler.name()] = llmHandler;
+
+    this.engine = new CognitiveEngine(
+      this.world_model,
+      this.agenda,
+      this.attention_policy,
+      this.truth_policy,
+      this.procedure_handlers,
+      this.schema_registry
+    );
 
     const deductionSchema = new DeductionSchema();
     this.schema_registry.register(deductionSchema);
@@ -55,108 +69,20 @@ export class App {
     }
   }
 
+  public update_llm_config(config: LLMConfig) {
+    const llmHandler = this.procedure_handlers['llm'] as LLMHandler;
+    if (llmHandler) {
+      llmHandler.update_config(config);
+    }
+  }
+
+  // The app's tick now simply delegates to the engine
   public async tick() {
-    if (await this.agenda.isEmpty()) return;
-
-    const task_a = await this.agenda.pop();
-    const context = this.world_model.find_resonant(task_a, 10);
-    this.last_scope_bindings = undefined;
-    this.last_scope_task = undefined;
-
-    if (context.length > 0) {
-      this.last_scope_bindings = resolveScopeBindings(task_a, context, this.world_model);
-      if (this.last_scope_bindings) {
-        this.last_scope_task = task_a;
-      }
-    }
-    const scope_bindings = this.last_scope_bindings;
-
-    if (task_a.type === TaskType.PROCEDURE) {
-      await this.handle_procedure_task(task_a, scope_bindings);
-    } else {
-      await this.handle_regular_task(task_a, context, scope_bindings);
-    }
-
-    if (task_a.type === TaskType.BELIEF) {
-      this.world_model.add_task(task_a);
-    }
+    await this.agenda.decay(this.attention_policy);
+    await this.engine.tick();
   }
 
-  private async handle_procedure_task(task: Task, scope_bindings?: Record<string, string>) {
-    const results = await execute_procedure(
-      task,
-      this.world_model,
-      this.procedure_handlers,
-      scope_bindings
-    );
-
-    const parent_content = this.world_model.get_atom(task.atom_id).content;
-    const new_path = (task.stamp.path || []).concat([parent_content]);
-
-    for (const result_task of results) {
-      result_task.stamp = {
-        timestamp: Date.now() / 1000,
-        parent_ids: [task.id],
-        schema_id: task.stamp.schema_id,
-        scope_bindings: scope_bindings,
-        path: new_path,
-      };
-      this.agenda.push(result_task);
-    }
-  }
-
-  private async handle_regular_task(task_a: Task, context: Task[], scope_bindings?: Record<string, string>) {
-    for (const task_b of context) {
-      await this.apply_schemas(task_a, task_b, scope_bindings);
-    }
-  }
-
-  private async apply_schemas(task_a: Task, task_b: Task, scope_bindings?: Record<string, string>) {
-    const schemas = this.world_model.find_schemas(task_a, task_b);
-    for (const schema of schemas) {
-      let derived: Task[] = [];
-      if (scope_bindings) {
-        derived = schema.apply_with_bindings(
-          task_a, task_b, this.truth_policy, scope_bindings, this.world_model
-        );
-      } else {
-        derived = schema.apply(task_a, task_b, this.truth_policy, this.world_model);
-      }
-
-      for (const new_task of derived) {
-        if (is_procedure_task(new_task, this.world_model)) {
-          await this.handle_procedure_task(new_task, scope_bindings);
-        } else {
-          this.enqueue_derived_task(new_task, task_a, task_b, schema.id, scope_bindings);
-        }
-      }
-    }
-  }
-
-  private async enqueue_derived_task(new_task: Task, parent_a: Task, parent_b: Task, schema_id: string, scope_bindings?: Record<string, string>) {
-    if (new_task.type === TaskType.BELIEF) {
-      new_task.truth = this.truth_policy.derivation(
-        parent_a, parent_b, schema_id
-      );
-    }
-    new_task.attention = this.attention_policy.calculate_derived(
-      parent_a, parent_b, schema_id
-    );
-
-    const parent_a_content = this.world_model.get_atom(parent_a.atom_id).content;
-    const parent_b_content = this.world_model.get_atom(parent_b.atom_id).content;
-    const new_path = (parent_a.stamp.path || [parent_a_content]).concat([parent_b_content]);
-
-    new_task.stamp = {
-      timestamp: Date.now() / 1000,
-      parent_ids: [parent_a.id, parent_b.id],
-      schema_id: schema_id,
-      scope_bindings: scope_bindings,
-      path: new_path,
-    };
-    await this.agenda.push(new_task);
-  }
-
+  // All methods below are for GUI interaction and state management
   public async add_new_thought(content: string, type: TaskType = TaskType.GOAL) {
     const atom: SemanticAtom = {
       id: uuidv4(),
@@ -186,6 +112,11 @@ export class App {
     if (task) {
       task.attention.priority = Math.min(1.0, task.attention.priority + 0.1);
       task.attention.durability = Math.min(1.0, task.attention.durability + 0.1);
+
+      if (task.type === TaskType.BELIEF && task.truth) {
+        task.truth.confidence = Math.min(1.0, task.truth.confidence + 0.1);
+      }
+
       await this.agenda.updatePriority(taskId, task.attention.priority);
     }
   }
@@ -200,15 +131,11 @@ export class App {
   }
 
   public pin_task(taskId: string) {
-    if (this.pinned_tasks.has(taskId)) {
-      this.pinned_tasks.delete(taskId);
-    } else {
-      this.pinned_tasks.add(taskId);
-    }
+    this.agenda.pin_task(taskId);
   }
 
   public is_task_pinned(taskId: string): boolean {
-    return this.pinned_tasks.has(taskId);
+    return this.agenda.is_task_pinned(taskId);
   }
 
   public async star_belief(taskId: string) {

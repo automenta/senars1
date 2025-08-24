@@ -1,10 +1,11 @@
-import { VectorDB, PatternMatcher, IAttentionPolicy, ITruthPolicy, IResonanceStrategy, ICognitiveSchema, ProcedureHandler } from './interfaces';
+import { VectorDB, PatternMatcher, IAttentionPolicy, ITruthPolicy, IResonanceStrategy, ICognitiveSchema, ProcedureHandler, TriggerPattern, MatchResult } from './interfaces';
 import { UUID, Vector, TaskType } from './types';
 import { generate_embedding } from './utils';
 import { Task, AttentionValue, TruthValue, SemanticAtom, DerivationStamp } from './models';
 import { WorldModel } from './world-model';
 import { parseSExpression, sExpressionToString, SExpression } from './s-expression';
 import { extract_param } from './procedure';
+import { ChatOpenAI } from "@langchain/openai";
 
 // Helper to generate a UUID (placeholder)
 function generate_uuid(prefix: string = ''): UUID {
@@ -47,6 +48,10 @@ export class InMemoryVectorDB implements VectorDB {
     similarities.sort((a, b) => b.similarity - a.similarity); // Sort descending
     return similarities.slice(0, k).map((s) => s.id);
   }
+
+  remove(atom_id: UUID): void {
+    delete this.embeddings[atom_id];
+  }
 }
 
 // Helper for S-Expression pattern matching with variables
@@ -88,36 +93,74 @@ export function matchSExpressionPattern(
 }
 
 export class InMemoryPatternMatcher implements PatternMatcher {
-  private patterns: Record<string, UUID[]> = {};
+    private single_premise_patterns: Map<string, UUID[]> = new Map();
+    private dual_premise_patterns: Map<string, UUID[]> = new Map();
 
-  add(pattern: string, schema_id: UUID): void {
-    if (!this.patterns[pattern]) {
-      this.patterns[pattern] = [];
-    }
-    this.patterns[pattern].push(schema_id);
-  }
-
-  match(content_a: string, content_b: string): UUID[] {
-    const matchedSchemaIds: UUID[] = [];
-    const contentA_SExpr = parseSExpression(content_a);
-    const contentB_SExpr = parseSExpression(content_b);
-
-    for (const patternStr in this.patterns) {
-      try {
-        const patternSExpr = parseSExpression(patternStr);
-        const bindings: Record<string, string> = {};
-
-        // Try matching pattern with content_a and content_b
-        if (matchSExpressionPattern(patternSExpr, contentA_SExpr, bindings) ||
-            matchSExpressionPattern(patternSExpr, contentB_SExpr, bindings)) {
-          matchedSchemaIds.push(...this.patterns[patternStr]);
+    add(pattern: TriggerPattern, schema_id: UUID): void {
+        const key = JSON.stringify(pattern);
+        if (typeof pattern === 'string') {
+            if (!this.single_premise_patterns.has(key)) {
+                this.single_premise_patterns.set(key, []);
+            }
+            this.single_premise_patterns.get(key)!.push(schema_id);
+        } else {
+            if (!this.dual_premise_patterns.has(key)) {
+                this.dual_premise_patterns.set(key, []);
+            }
+            this.dual_premise_patterns.get(key)!.push(schema_id);
         }
-      } catch (e) {
-        console.warn(`Error parsing pattern S-Expression '${patternStr}':`, e);
-      }
     }
-    return matchedSchemaIds;
-  }
+
+    match(content_a: string, content_b: string): MatchResult[] {
+        const results: MatchResult[] = [];
+        const contentA_SExpr = parseSExpression(content_a);
+        const contentB_SExpr = parseSExpression(content_b);
+
+        // Dual premise matching
+        for (const [patternKey, schema_ids] of this.dual_premise_patterns.entries()) {
+            const pattern = JSON.parse(patternKey) as [string, string];
+            const patternA = parseSExpression(pattern[0]);
+            const patternB = parseSExpression(pattern[1]);
+
+            // Try matching (A, B) with (content_a, content_b)
+            const bindings1: Record<string, string> = {};
+            if (matchSExpressionPattern(patternA, contentA_SExpr, bindings1) && matchSExpressionPattern(patternB, contentB_SExpr, bindings1)) {
+                for (const schema_id of schema_ids) {
+                    results.push({ schema_id, bindings: { ...bindings1 } });
+                }
+            }
+
+            // Try matching (A, B) with (content_b, content_a)
+            const bindings2: Record<string, string> = {};
+            if (matchSExpressionPattern(patternA, contentB_SExpr, bindings2) && matchSExpressionPattern(patternB, contentA_SExpr, bindings2)) {
+                for (const schema_id of schema_ids) {
+                    results.push({ schema_id, bindings: { ...bindings2 } });
+                }
+            }
+        }
+
+        // Single premise matching (optional, if schemas can be triggered by one task)
+        for (const [patternKey, schema_ids] of this.single_premise_patterns.entries()) {
+            const pattern = JSON.parse(patternKey) as string;
+            const patternSExpr = parseSExpression(pattern);
+
+            const bindingsA: Record<string, string> = {};
+            if (matchSExpressionPattern(patternSExpr, contentA_SExpr, bindingsA)) {
+                 for (const schema_id of schema_ids) {
+                    results.push({ schema_id, bindings: { ...bindingsA } });
+                }
+            }
+
+            const bindingsB: Record<string, string> = {};
+            if (matchSExpressionPattern(patternSExpr, contentB_SExpr, bindingsB)) {
+                 for (const schema_id of schema_ids) {
+                    results.push({ schema_id, bindings: { ...bindingsB } });
+                }
+            }
+        }
+
+        return results;
+    }
 }
 
 export class DefaultAttentionPolicy implements IAttentionPolicy {
@@ -223,7 +266,31 @@ export class DefaultResonanceStrategy implements IResonanceStrategy {
   }
 }
 
+export interface LLMConfig {
+    apiKey: string;
+    modelName: string;
+}
+
 export class LLMHandler implements ProcedureHandler {
+  private config?: LLMConfig;
+  private llm?: ChatOpenAI;
+
+  constructor(config?: LLMConfig) {
+    if (config) {
+      this.update_config(config);
+    }
+  }
+
+  public update_config(config: LLMConfig) {
+    this.config = config;
+    this.llm = new ChatOpenAI({
+        apiKey: this.config.apiKey,
+        modelName: this.config.modelName,
+        temperature: 0.7,
+    });
+    console.log("LLMHandler configured with new settings.");
+  }
+
   name(): string {
     return "llm";
   }
@@ -232,49 +299,84 @@ export class LLMHandler implements ProcedureHandler {
     return content.includes('(execute "llm"');
   }
 
-  execute(
+  async execute(
     content: string,
     bindings: Record<string, string>,
     world_model: WorldModel
-  ): Task[] {
-    console.warn("LLMHandler.execute is a placeholder.");
-    const query = extract_param(content, "query");
-
-    if (!query) {
-      return [];
+  ): Promise<Task[]> {
+    if (!this.llm || !this.config) {
+      console.warn("LLMHandler is not configured. Returning empty result.");
+      return this.create_error_task("LLM handler not configured.", world_model);
     }
 
-    // Simulate LLM call
-    const llm_result_text = `Simulated LLM response for: ${query}`;
-    const llm_result_confidence = 0.8;
+    let query = extract_param(content, "query");
+    if (!query) {
+      return this.create_error_task("Query parameter missing from LLM execution.", world_model);
+    }
 
-    const atom_content = `(search_result "${query}" "${llm_result_text}")`;
-    const atom: SemanticAtom = {
-      id: generate_uuid(),
-      content: atom_content,
-      embedding: generate_embedding(atom_content),
-    };
-    world_model.add_atom(atom);
+    // Substitute bindings into query
+    for (const key in bindings) {
+        const placeholder = new RegExp(key.replace('$', '\\$'), 'g');
+        query = query.replace(placeholder, bindings[key]);
+    }
 
-    return [
-      {
-        id: generate_uuid(),
-        atom_id: atom.id,
-        type: TaskType.BELIEF,
-        truth: {
-          frequency: 0.9,
-          confidence: llm_result_confidence,
-        },
-        attention: {
-          priority: 0.8,
-          durability: 0.7,
-        },
-        stamp: {
-          timestamp: Date.now() / 1000,
-          parent_ids: [],
-          schema_id: generate_uuid("llm_handler"),
-        },
-      },
-    ];
+    try {
+        const response = await this.llm.invoke(query);
+        const result_text = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+
+        const atom_content = `(search_result "${query}" "${result_text}")`;
+        const atom: SemanticAtom = {
+            id: generate_uuid(),
+            content: atom_content,
+            embedding: generate_embedding(atom_content),
+        };
+        world_model.add_atom(atom);
+
+        return [
+            {
+                id: generate_uuid(),
+                atom_id: atom.id,
+                type: TaskType.BELIEF,
+                truth: {
+                    frequency: 0.9,
+                    confidence: 0.9, // High confidence for direct LLM results
+                },
+                attention: {
+                    priority: 0.8,
+                    durability: 0.7,
+                },
+                stamp: {
+                    timestamp: Date.now() / 1000,
+                    parent_ids: [],
+                    schema_id: generate_uuid("llm_handler"),
+                },
+            },
+        ];
+    } catch (error: any) {
+        console.error("Error executing LLM query:", error);
+        return this.create_error_task(`LLM API Error: ${error.message}`, world_model);
+    }
+  }
+
+  private create_error_task(error_message: string, world_model: WorldModel): Task[] {
+      const error_atom: SemanticAtom = {
+          id: generate_uuid(),
+          content: `(execution_error "llm" "${error_message}")`,
+          embedding: generate_embedding(error_message)
+      };
+      world_model.add_atom(error_atom);
+
+      return [{
+          id: generate_uuid(),
+          atom_id: error_atom.id,
+          type: TaskType.BELIEF,
+          truth: { frequency: 1.0, confidence: 1.0 },
+          attention: { priority: 0.95, durability: 0.9 },
+          stamp: {
+              timestamp: Date.now() / 1000,
+              parent_ids: [],
+              schema_id: generate_uuid("error_handler")
+          }
+      }];
   }
 }
