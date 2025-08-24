@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div class="container">
+    <div class="container" data-mode="thinking">
       <header>
         <h1>THINKING TODO LIST</h1>
         <div class="controls">
@@ -28,6 +28,16 @@
           <h2>✅ COMPLETED THOUGHTS (Knowledge Base)</h2>
           <div id="completed-thoughts-list"></div>
         </section>
+
+        <section id="schema-view">
+          <h2>⚡ AUTOMATION RULES (Schemas)</h2>
+          <div id="schema-list"></div>
+        </section>
+
+        <section id="scope-debugger">
+          <h2>🌐 SCOPE DEBUGGER</h2>
+          <div id="scope-debugger-content"></div>
+        </section>
       </main>
 
       <footer>
@@ -37,6 +47,23 @@
         </div>
       </footer>
     </div>
+
+    <div id="settings-modal" class="modal">
+      <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h2>Settings</h2>
+        <div class="setting">
+          <label for="user-mode-select">User Mode:</label>
+          <select id="user-mode-select">
+            <option value="thinking">Thinking Mode</option>
+            <option value="learning">Learning Mode</option>
+            <option value="expert">Expert Mode</option>
+            <option value="debugger">Debugger Mode</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

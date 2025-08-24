@@ -99,12 +99,13 @@ export function extract_param(content: string, paramName: string): string | unde
   return undefined;
 }
 
-export function execute_procedure(
+export async function execute_procedure(
   task: Task,
   world_model: WorldModel,
   handlers: Record<string, ProcedureHandler>,
-  bindings: Record<string, string> | undefined
-): Task[] {
+  bindings: Record<string, string> | undefined,
+  timeout_ms: number = 5000
+): Promise<Task[]> {
   const atom = world_model.get_atom(task.atom_id);
   let content = atom.content;
 
@@ -118,8 +119,21 @@ export function execute_procedure(
     return [];
   }
 
+  const execution_promise = new Promise<Task[]>((resolve, reject) => {
+    try {
+      const result = handlers[handler_name].execute(content, bindings || {}, world_model);
+      resolve(result);
+    } catch (e) {
+      reject(e);
+    }
+  });
+
+  const timeout_promise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Execution timed out after ${timeout_ms}ms`)), timeout_ms)
+  );
+
   try {
-    return handlers[handler_name].execute(content, bindings || {}, world_model);
+    return await Promise.race([execution_promise, timeout_promise]);
   } catch (e: any) {
     return create_error_task(e, handler_name, task.id, world_model);
   }

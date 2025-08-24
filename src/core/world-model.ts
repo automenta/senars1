@@ -100,4 +100,40 @@ export class WorldModel {
     }
     return task;
   }
+
+  remove_task(task_id: UUID): void {
+    const task = this.tasks[task_id];
+    if (!task) {
+      return;
+    }
+
+    const atom_id_to_remove = task.atom_id;
+    delete this.tasks[task_id];
+
+    // Check if any other task uses the same atom
+    const is_atom_used_elsewhere = Object.values(this.tasks).some(
+      t => t.atom_id === atom_id_to_remove
+    );
+
+    if (!is_atom_used_elsewhere) {
+      const atom = this.atoms[atom_id_to_remove];
+      if (atom) {
+        // Remove from symbolic index
+        const symbolic_list = this.symbolic_index[atom.content];
+        if (symbolic_list) {
+          const index = symbolic_list.indexOf(atom.id);
+          if (index > -1) {
+            symbolic_list.splice(index, 1);
+          }
+          if (symbolic_list.length === 0) {
+            delete this.symbolic_index[atom.content];
+          }
+        }
+        // remove from semantic index needs implementation in VectorDB
+        // this.semantic_index.remove(atom.id);
+
+        delete this.atoms[atom_id_to_remove];
+      }
+    }
+  }
 }

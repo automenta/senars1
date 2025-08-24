@@ -7,8 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const gui = new Gui(app, app.world_model, app.agenda, app.schema_registry);
   gui.init();
 
-  setInterval(() => {
-    app.tick();
-    gui.render();
+  setInterval(async () => {
+    await app.tick();
+    await gui.render();
   }, 1000);
 });

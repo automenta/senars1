@@ -57,7 +57,7 @@ describe('Procedure Execution', () => {
     };
   });
 
-  it('should execute a procedure task', () => {
+  it('should execute a procedure task', async () => {
     const atom: SemanticAtom = {
       id: uuidv4(),
       content: '(execute "llm" query:"test query")',
@@ -73,7 +73,7 @@ describe('Procedure Execution', () => {
       stamp: { timestamp: 0, parent_ids: [], schema_id: '' },
     };
 
-    const results = execute_procedure(task, worldModel, handlers, undefined);
+    const results = await execute_procedure(task, worldModel, handlers, undefined);
     expect(results.length).toBe(1);
     const resultTask = results[0];
     expect(resultTask.type).toBe(TaskType.BELIEF);
@@ -81,7 +81,7 @@ describe('Procedure Execution', () => {
     expect(resultAtom.content).toContain('search_result');
   });
 
-  it('should handle missing handlers', () => {
+  it('should handle missing handlers', async () => {
     const atom: SemanticAtom = {
       id: uuidv4(),
       content: '(execute "unknown" query:"test")',
@@ -97,7 +97,7 @@ describe('Procedure Execution', () => {
       stamp: { timestamp: 0, parent_ids: [], schema_id: '' },
     };
 
-    const results = execute_procedure(task, worldModel, handlers, undefined);
+    const results = await execute_procedure(task, worldModel, handlers, undefined);
     expect(results.length).toBe(0);
   });
 });
