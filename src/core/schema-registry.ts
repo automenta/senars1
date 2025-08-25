@@ -22,6 +22,14 @@ export class SchemaRegistry {
     return this.schemas[schema_id];
   }
 
+  unregister(schema_id: UUID): void {
+    const schema = this.schemas[schema_id];
+    if (schema) {
+      this.pattern_matcher.remove(schema.get_trigger_pattern(), schema.id);
+      delete this.schemas[schema_id];
+    }
+  }
+
   get_all(): ICognitiveSchema[] {
     return Object.values(this.schemas);
   }

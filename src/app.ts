@@ -95,6 +95,30 @@ export class App {
     }
   }
 
+  public register_schema(schema: ICognitiveSchema) {
+    this.schema_registry.register(schema);
+  }
+
+  public unregister_schema(schemaId: UUID) {
+    this.schema_registry.unregister(schemaId);
+  }
+
+  public get_schema_registry(): SchemaRegistry {
+    return this.schema_registry;
+  }
+
+  public register_procedure_handler(handler: ProcedureHandler) {
+    this.procedure_handlers[handler.name()] = handler;
+  }
+
+  public unregister_procedure_handler(handlerName: string) {
+    delete this.procedure_handlers[handlerName];
+  }
+
+  public get_procedure_handlers(): Record<string, ProcedureHandler> {
+    return this.procedure_handlers;
+  }
+
   public static async create(seedData: boolean = true): Promise<App> {
     const config = await loadConfig();
     return new App(config, seedData);

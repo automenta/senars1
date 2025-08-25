@@ -65,4 +65,41 @@ describe('App', () => {
       expect(path[path.length - 1]).toContain('[Schema:');
     });
   });
+
+  describe('API Extensibility', () => {
+    it('should allow registering and unregistering a custom schema', () => {
+      // A simple custom schema for testing
+      const customSchema = new DeductionSchema();
+      customSchema['id'] = 'custom_schema_id'; // Mock ID for predictability
+
+      // Register
+      app.register_schema(customSchema);
+      const registry = app.get_schema_registry();
+      expect(registry.get('custom_schema_id')).toBe(customSchema);
+
+      // Unregister
+      app.unregister_schema('custom_schema_id');
+      expect(registry.get('custom_schema_id')).toBeUndefined();
+    });
+
+    it('should allow registering and unregistering a custom procedure handler', () => {
+      // A simple custom handler for testing
+      const customHandler = {
+        name: () => 'custom_handler',
+        can_handle: (content: string) => content.includes('custom_handler'),
+        execute: async (content: string, bindings: Record<string, string>, world_model: any) => {
+          return [];
+        }
+      };
+
+      // Register
+      app.register_procedure_handler(customHandler);
+      const handlers = app.get_procedure_handlers();
+      expect(handlers['custom_handler']).toBe(customHandler);
+
+      // Unregister
+      app.unregister_procedure_handler('custom_handler');
+      expect(handlers['custom_handler']).toBeUndefined();
+    });
+  });
 });
