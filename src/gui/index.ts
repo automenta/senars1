@@ -106,8 +106,9 @@ export class Gui {
       this.state.simulationRunning = true;
 
       const gameLoop = async () => {
-          // Main simulation logic
-          await this.guiManager.app.tick(); // Decay and other global updates
+          // The main loop now only handles attention decay and dispatches tasks to workers.
+          // The heavy cognitive processing is offloaded.
+          await this.agenda.decay(this.guiManager.app.get_attention_policy());
           await this.dispatchTasks();
           await this.renderer.render();
 

@@ -105,6 +105,15 @@ export class WorkerPool {
         const freeWorkerState = this.pool.find(ws => !ws.isBusy);
         if (freeWorkerState) {
             freeWorkerState.isBusy = true;
+
+            // Ensure the worker has the latest world model state before processing the task
+            const snapshot = {
+                atoms: this.guiManager.app.world_model.atoms,
+                tasks: this.guiManager.app.world_model.tasks,
+            };
+            freeWorkerState.worker.postMessage({ type: 'update_world_model', payload: snapshot });
+
+            // Now, send the task to be processed
             freeWorkerState.worker.postMessage({ type: 'process', payload: { task } });
         }
     }
