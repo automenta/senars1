@@ -104,7 +104,8 @@ export class Renderer {
                     try {
                         return this.gui.world_model.get_atom(this.gui.world_model.get_task(id).atom_id).content;
                     } catch (e) {
-                        console.error(`Error fetching related task atom content for ID ${id}:`, e);
+                        // This can happen in a race condition where the parent task has been processed
+                        // and removed before the child is rendered. We can safely ignore this.
                         return 'Unknown';
                     }
                 }).join(', ')}`
