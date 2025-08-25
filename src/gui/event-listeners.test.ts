@@ -28,13 +28,23 @@ describe('EventListeners', () => {
         mockApp = {
             get_config: vi.fn().mockReturnValue({ llm: { apiKey: 'old-key', modelName: 'old-model' } }),
             update_llm_config: vi.fn(),
-            on: vi.fn(),
-            // Mock other methods called by listeners if necessary
+        };
+
+        const mockGuiManager = {
+            get_llm_config: vi.fn().mockReturnValue(mockApp.get_config().llm),
+            update_llm_config: vi.fn(),
             add_new_thought: vi.fn().mockResolvedValue(undefined),
+            boost_task: vi.fn().mockResolvedValue(undefined),
+            reduce_task_priority: vi.fn().mockResolvedValue(undefined),
+            verify_belief: vi.fn().mockResolvedValue(undefined),
+            dispute_belief: vi.fn().mockResolvedValue(undefined),
+            star_belief: vi.fn().mockResolvedValue(undefined),
+            question_belief: vi.fn(),
+            forget_belief: vi.fn(),
         };
 
         mockGui = {
-            app: mockApp,
+            guiManager: mockGuiManager,
             event_bus: { on: vi.fn(), emit: vi.fn() },
             settingsBtn: document.getElementById('settings-btn'),
             settingsModal: document.getElementById('settings-modal'),
@@ -47,6 +57,7 @@ describe('EventListeners', () => {
             addNewThoughtButton: document.getElementById('add-new-thought-button'),
             userModeSelect: document.getElementById('user-mode-select'),
             workerCountSlider: document.getElementById('worker-count-slider'),
+            simulationSpeedSlider: document.getElementById('simulation-speed-slider'),
             completedThoughtsList: document.getElementById('completed-thoughts-list'),
             activeThoughtsList: document.getElementById('active-thoughts-list'),
             container: document.body,
@@ -58,8 +69,8 @@ describe('EventListeners', () => {
                 show: vi.fn(),
             },
             settingsModalComponent: {
-                open_settings: vi.fn(),
-                close_settings: vi.fn(),
+                show: vi.fn(),
+                hide: vi.fn(),
                 save_llm_config: vi.fn(),
             }
         };
@@ -70,31 +81,19 @@ describe('EventListeners', () => {
 
     it('should delegate opening settings to the component', () => {
         const settingsBtn = document.getElementById('settings-btn')!;
-        settingsBtn.setAttribute('data-action', 'open-settings');
-
-        // We need to re-create the component with the mock GUI to test it
-        mockGui.settingsModalComponent = { open_settings: vi.fn() };
-        eventListeners['gui'].settingsModalComponent = mockGui.settingsModalComponent;
 
         // Simulate a click
         settingsBtn.click();
 
-        // The test is a bit contrived because the component is instantiated outside
-        // but we verify the delegation happens.
-        // A better test would be a full E2E test.
-        // For now, we check if the container click handler calls the component method.
-        // This requires a more complex setup, so we will skip for now.
+        expect(mockGui.settingsModalComponent.show).toHaveBeenCalled();
     });
 
     it('should delegate saving config to the component', () => {
         const saveBtn = document.getElementById('save-llm-config-btn')!;
-        saveBtn.setAttribute('data-action', 'save-llm-config');
 
-        mockGui.settingsModalComponent = { save_llm_config: vi.fn() };
-        eventListeners['gui'].settingsModalComponent = mockGui.settingsModalComponent;
-
+        // Simulate a click
         saveBtn.click();
-        // Similar to the above, direct testing of the handler is complex.
-        // We trust the delegation is wired up correctly.
+
+        expect(mockGui.settingsModalComponent.save_llm_config).toHaveBeenCalled();
     });
 });

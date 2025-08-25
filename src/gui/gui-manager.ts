@@ -129,4 +129,12 @@ export class GuiManager {
   public emit(eventName: string, data: any) {
     this.eventBus.emit(eventName, data);
   }
+
+  public get_llm_config() {
+      return this.app.get_config().llm;
+  }
+
+  public update_llm_config(config: any) {
+      this.app.update_llm_config(config);
+  }
 }

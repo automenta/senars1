@@ -43,6 +43,7 @@ export class Gui {
   userModeSelect: HTMLSelectElement;
   container: HTMLElement;
   workerCountSlider: HTMLInputElement;
+  simulationSpeedSlider: HTMLInputElement;
 
   state: {
     currentMode: string;
@@ -84,6 +85,7 @@ export class Gui {
     this.addNewThoughtButton = document.getElementById('add-new-thought-button')!;
     this.userModeSelect = document.getElementById('user-mode-select') as HTMLSelectElement;
     this.workerCountSlider = document.getElementById('worker-count-slider') as HTMLInputElement;
+    this.simulationSpeedSlider = document.getElementById('simulation-speed-slider') as HTMLInputElement;
     this.container = document.querySelector('.container')!;
   }
 

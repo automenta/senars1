@@ -19,28 +19,20 @@ export class SettingsModalComponent {
         this.llmApiKeyInput = document.getElementById('llm-api-key') as HTMLInputElement;
         this.llmModelNameInput = document.getElementById('llm-model-name') as HTMLInputElement;
         this.saveLlmConfigBtn = document.getElementById('save-llm-config-btn')!;
-
-        this.attach_event_listeners();
     }
 
-    private attach_event_listeners() {
-        document.getElementById('settings-btn')?.addEventListener('click', () => this.open_settings());
-        this.closeModalBtn.addEventListener('click', () => this.close_settings());
-        this.saveLlmConfigBtn.addEventListener('click', () => this.save_llm_config());
-    }
-
-    public open_settings() {
-        const currentConfig = this.gui.app.get_config().llm;
+    public show() {
+        const currentConfig = this.gui.guiManager.get_llm_config();
         this.llmApiKeyInput.value = currentConfig.apiKey || '';
         this.llmModelNameInput.value = currentConfig.modelName || '';
         this.settingsModal.classList.add('is-visible');
     }
 
-    public close_settings() {
+    public hide() {
         this.settingsModal.classList.remove('is-visible');
     }
 
-    private save_llm_config() {
+    public save_llm_config() {
         const config = {
             apiKey: this.llmApiKeyInput.value,
             modelName: this.llmModelNameInput.value
@@ -50,8 +42,8 @@ export class SettingsModalComponent {
             return;
         }
         localStorage.setItem('llm_config', JSON.stringify(config));
-        this.gui.app.update_llm_config(config);
+        this.gui.guiManager.update_llm_config(config);
         this.gui.notificationComponent.show('Configuration saved!', 'success');
-        this.close_settings();
+        this.hide();
     }
 }
