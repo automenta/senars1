@@ -87,6 +87,15 @@ export function matchSExpressionPattern(
     return false;
   } else {
     // Both are S-Expressions
+    if (patternSExpr.head.startsWith('$')) {
+        const varName = patternSExpr.head;
+        if (bindings[varName] && bindings[varName] !== sExpressionToString(contentSExpr)) {
+            return false; // Variable already bound to a different value
+        }
+        bindings[varName] = sExpressionToString(contentSExpr);
+        return true; // The entire S-expression is bound to the head variable
+    }
+
     if (patternSExpr.head !== contentSExpr.head) {
       return false;
     }
