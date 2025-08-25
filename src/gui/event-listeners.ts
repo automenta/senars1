@@ -82,6 +82,9 @@ export class EventListeners {
             case 'reduce-task':
                 if (task_id) await this.gui.guiManager.reduce_task_priority(task_id);
                 break;
+            case 'pin-task':
+                if (task_id) this.gui.pin_task(task_id);
+                break;
             // Completed Thought (Belief) Actions
             case 'verify-belief':
                 if (task_id) await this.gui.guiManager.verify_belief(task_id);
@@ -93,10 +96,22 @@ export class EventListeners {
                 if (task_id) await this.gui.guiManager.star_belief(task_id);
                 break;
             case 'question-belief':
-                if (task_id) this.question_belief(task_id);
+                if (task_id) {
+                    const belief_task = this.gui.world_model.get_task(task_id);
+                    const belief_content = this.gui.world_model.get_atom(belief_task.atom_id).content;
+                    const question = `Why is "${belief_content}" true?`;
+                    this.gui.newThoughtInput.value = question;
+                    this.gui.newThoughtInput.focus();
+                    this.gui.notificationComponent.show('Question ready in input box.', 'info');
+                }
                 break;
             case 'forget-belief':
-                if (task_id) this.forget_belief(task_id);
+                if (task_id) {
+                    const belief_task = this.gui.world_model.get_task(task_id);
+                    const belief_content = this.gui.world_model.get_atom(belief_task.atom_id).content;
+                    this.gui.guiManager.forget_belief(task_id);
+                    this.gui.notificationComponent.show(`Belief "${belief_content}" forgotten.`, 'info');
+                }
                 break;
         }
     }
@@ -126,24 +141,6 @@ export class EventListeners {
             this.gui.event_bus.emit('user_thought_added', { content, type });
         }
     }
-
-    private question_belief(task_id: string) {
-        const belief_task = this.gui.world_model.get_task(task_id);
-        const belief_content = this.gui.world_model.get_atom(belief_task.atom_id).content;
-        const question = `Why is "${belief_content}" true?`;
-
-        this.gui.newThoughtInput.value = question;
-        this.gui.newThoughtInput.focus();
-        this.gui.notificationComponent.show('Question ready in input box.', 'info');
-    }
-
-    private forget_belief(task_id: string) {
-        const belief_task = this.gui.world_model.get_task(task_id);
-        const belief_content = this.gui.world_model.get_atom(belief_task.atom_id).content;
-        this.gui.guiManager.forget_belief(task_id);
-        this.gui.notificationComponent.show(`Belief "${belief_content}" forgotten.`, 'info');
-    }
-
 
     private attach_gesture_listeners() {
         const cards = document.querySelectorAll('.thought-card');

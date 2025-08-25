@@ -199,6 +199,7 @@ export class Renderer {
       <div class="feedback-actions">
         <button class="action-btn feedback-btn thumb-up-btn" data-task-id="${task.id}" data-action="${isCompleted ? 'verify-belief' : 'boost-task'}" title="This is correct/important">👍</button>
         <button class="action-btn feedback-btn thumb-down-btn" data-task-id="${task.id}" data-action="${isCompleted ? 'dispute-belief' : 'reduce-task'}" title="This is incorrect/unimportant">👎</button>
+        <button class="action-btn pin-btn" data-task-id="${task.id}" data-action="pin-task" title="${isPinned ? 'Unpin Task' : 'Pin Task'}">${isPinned ? '📌' : '📍'}</button>
       </div>
     `;
 

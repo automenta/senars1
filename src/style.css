@@ -145,7 +145,7 @@ h2 {
   gap: 5px;
 }
 
-.action-btn, .feedback-btn {
+.action-btn, .feedback-btn, .pin-btn {
   background-color: #ecf0f1;
   border: 1px solid #bdc3c7;
   border-radius: 4px;
@@ -155,16 +155,21 @@ h2 {
   transition: background-color 0.2s;
 }
 
-.action-btn:hover, .feedback-btn:hover {
+.action-btn:hover, .feedback-btn:hover, .pin-btn:hover {
   background-color: #e0e0e0;
   transform: translateY(-1px);
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.action-btn:active, .feedback-btn:active {
+.action-btn:active, .feedback-btn:active, .pin-btn:active {
   transform: translateY(0px);
   box-shadow: none;
   background-color: #dcdcdc;
+}
+
+.pin-btn:hover {
+    background-color: #f39c12; /* Same as medium priority */
+    color: white;
 }
 
 .thumb-up-btn:hover {
