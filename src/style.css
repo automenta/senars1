@@ -261,3 +261,8 @@ footer {
 .toast-notification.info {
   background-color: #17a2b8; /* Blue */
 }
+
+#memory .thought-card {
+  border-left-color: #8e44ad; /* A distinct purple for memories */
+  background-color: #fdf9ff;
+}

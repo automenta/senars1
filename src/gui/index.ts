@@ -16,6 +16,7 @@ import { NotificationComponent } from './components/NotificationComponent';
 import { MetricsComponent } from './components/MetricsComponent';
 import { ActiveThoughtsComponent } from './components/ActiveThoughtsComponent';
 import { CompletedThoughtsComponent } from './components/CompletedThoughtsComponent';
+import { MemoryComponent } from './components/MemoryComponent';
 import { WorkerPool } from './worker-pool';
 
 export class Gui {
@@ -31,6 +32,7 @@ export class Gui {
   metricsComponent: MetricsComponent;
   activeThoughtsComponent: ActiveThoughtsComponent;
   completedThoughtsComponent: CompletedThoughtsComponent;
+  memoryComponent: MemoryComponent;
   workerPool: WorkerPool;
 
   // DOM Elements
@@ -70,6 +72,7 @@ export class Gui {
     this.metricsComponent = new MetricsComponent(this);
     this.activeThoughtsComponent = new ActiveThoughtsComponent(this);
     this.completedThoughtsComponent = new CompletedThoughtsComponent(this);
+    this.memoryComponent = new MemoryComponent(this);
     // The '/src/core/worker.ts' path is resolved by Vite's worker loader
     this.workerPool = new WorkerPool(this.app, '/src/core/worker.ts', 2);
 
