@@ -142,6 +142,37 @@ describe('Scope Parsing and Resolution', () => {
         const bindings = await resolveScopeBindings(scopeTask, [contextTask], worldModel);
         expect(bindings).toEqual({ '%substance': 'chocolate', '%animal': 'cat' });
       });
+
+    it('should bind a variable only once and not overwrite it', async () => {
+        const scopeAtom: SemanticAtom = {
+          id: uuidv4(),
+          content: '{(%x), (isa %x animal)}',
+          embedding: [],
+        };
+        const contextAtom1: SemanticAtom = { id: uuidv4(), content: '(isa cat animal)', embedding: [] };
+        const contextAtom2: SemanticAtom = { id: uuidv4(), content: '(isa dog animal)', embedding: [] };
+        await worldModel.add_atom(scopeAtom);
+        await worldModel.add_atom(contextAtom1);
+        await worldModel.add_atom(contextAtom2);
+
+        const scopeTask: Task = {
+            id: uuidv4(), atom_id: scopeAtom.id, type: TaskType.GOAL,
+            attention: { priority: 1, durability: 1 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' }
+        };
+        const contextTask1: Task = {
+            id: uuidv4(), atom_id: contextAtom1.id, type: TaskType.BELIEF,
+            attention: { priority: 1, durability: 1 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' }
+        };
+        const contextTask2: Task = {
+            id: uuidv4(), atom_id: contextAtom2.id, type: TaskType.BELIEF,
+            attention: { priority: 1, durability: 1 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' }
+        };
+
+        // The order of context tasks might matter depending on the implementation, so we pass them in a fixed order.
+        const bindings = await resolveScopeBindings(scopeTask, [contextTask1, contextTask2], worldModel);
+        // The first match should bind %x to "cat" and the logic should not overwrite it with "dog".
+        expect(bindings).toEqual({ '%x': 'cat' });
+      });
   });
 
   describe('substituteInContent', () => {

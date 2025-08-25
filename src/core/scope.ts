@@ -108,18 +108,40 @@ export function resolveScopeBindings(
         }
       }
 
-      // 2. Attempt to find bindings by matching patterns in the scope body against context tasks
-      for (const body_pattern_str of parsed_scope.bodies) {
-        if (!body_pattern_str.startsWith('(')) continue; // Skip non-S-expression bodies
+      // 2. For each variable, try to find a binding if it's not already bound by a default.
+      variable_loop: for (const var_def of parsed_scope.variables) {
+        if (bindings[var_def.name]) {
+          continue; // Already bound (e.g., by a default value)
+        }
 
-        const body_pattern_sexpr = parseSExpression(body_pattern_str);
+        // Search for a binding for this specific variable
+        for (const body_pattern_str of parsed_scope.bodies) {
+          if (!body_pattern_str.includes(var_def.name)) {
+            continue; // This pattern doesn't involve the variable we're trying to bind.
+          }
+          if (!body_pattern_str.startsWith('(')) continue;
 
-        for (const context_task of context_tasks) {
-          const context_atom = world_model.get_atom(context_task.atom_id);
-          const context_sexpr = parseSExpression(context_atom.content);
+          const body_pattern_sexpr = parseSExpression(body_pattern_str);
 
-          // Use the new recursive search function
-          findAndMatchPattern(body_pattern_sexpr, context_sexpr, bindings);
+          for (const context_task of context_tasks) {
+            const context_atom = world_model.get_atom(context_task.atom_id);
+            const context_sexpr = parseSExpression(context_atom.content);
+
+            // Create a temporary bindings object for this attempt
+            const temp_bindings: Record<string, string> = {...bindings};
+
+            if (findAndMatchPattern(body_pattern_sexpr, context_sexpr, temp_bindings)) {
+              // A match was found. Check if it gives us the variable we are looking for.
+              if (temp_bindings[var_def.name] && !bindings[var_def.name]) {
+                  // Bind the variable
+                  bindings[var_def.name] = temp_bindings[var_def.name];
+                  // And also accept any other bindings found in this successful match
+                  Object.assign(bindings, temp_bindings);
+                  // Once the variable is bound, continue to the next variable.
+                  continue variable_loop;
+              }
+            }
+          }
         }
       }
 
