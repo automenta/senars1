@@ -19,33 +19,53 @@ const defaultConfig: Config = {
     },
 };
 
+// Helper function to merge configs
+function mergeConfig(loadedConfig: any): Config {
+    return {
+        ...defaultConfig,
+        ...loadedConfig,
+        llm: {
+            ...defaultConfig.llm,
+            ...loadedConfig.llm,
+        },
+    };
+}
+
 export async function loadConfig(): Promise<Config> {
-    // Check if running in a browser environment where fetch is available
-    if (typeof window !== 'undefined' && typeof window.fetch !== 'undefined') {
-        try {
-            const response = await fetch('/config.json');
-            if (!response.ok) {
-                console.warn(`config.json not found (status: ${response.status}), using default configuration.`);
-                return defaultConfig;
+    // Browser environment
+    if (typeof window !== 'undefined' && window.localStorage) {
+        // 1. Try loading from localStorage
+        const storedConfigStr = window.localStorage.getItem('llm_config');
+        if (storedConfigStr) {
+            try {
+                console.log("Loading config from localStorage.");
+                const loadedConfig = JSON.parse(storedConfigStr);
+                return mergeConfig({ llm: loadedConfig });
+            } catch (error) {
+                console.error("Error parsing config from localStorage, falling back.", error);
             }
-            const loadedConfig = await response.json();
-            // Deep merge with defaults to ensure all keys are present
-            const config = {
-                ...defaultConfig,
-                ...loadedConfig,
-                llm: {
-                    ...defaultConfig.llm,
-                    ...loadedConfig.llm,
-                },
-            };
-            return config;
+        }
+
+        // 2. Fallback to fetching /config.json
+        try {
+            console.log("localStorage config not found, fetching /config.json.");
+            const response = await fetch('/config.json');
+            if (response.ok) {
+                const loadedConfig = await response.json();
+                return mergeConfig(loadedConfig);
+            } else {
+                 console.warn(`config.json not found (status: ${response.status}), using default configuration.`);
+            }
         } catch (error) {
             console.error("Error loading or parsing config.json, using default configuration:", error);
-            return defaultConfig;
         }
+
+        // 3. Use default config if all else fails
+        return defaultConfig;
+
     } else {
-        // Running in a non-browser environment (e.g., Node.js for tests)
-        // where relative fetch doesn't work. Return default config.
+        // Non-browser environment (e.g., tests in Node.js)
+        console.log("Non-browser environment detected, using default config.");
         return defaultConfig;
     }
 }

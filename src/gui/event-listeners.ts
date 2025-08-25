@@ -21,6 +21,10 @@ export class EventListeners {
         });
 
         this.gui.settingsBtn.addEventListener('click', () => {
+            // Populate the modal with the current config
+            const currentConfig = this.gui.app.get_config().llm;
+            this.gui.llmApiKeyInput.value = currentConfig.apiKey || '';
+            this.gui.llmModelNameInput.value = currentConfig.modelName || '';
             this.gui.settingsModal.style.display = 'block';
         });
 
@@ -81,9 +85,9 @@ export class EventListeners {
             this.gui.llmConfigStatus.style.color = 'red';
             return;
         }
-        localStorage.setItem('llmConfig', JSON.stringify(config));
+        localStorage.setItem('llm_config', JSON.stringify(config));
         this.gui.app.update_llm_config(config);
-        this.gui.llmConfigStatus.textContent = 'Configuration saved!';
+        this.gui.llmConfigStatus.textContent = 'Configuration saved! It will be applied on next reload or action.';
         this.gui.llmConfigStatus.style.color = 'green';
         setTimeout(() => {
             this.gui.llmConfigStatus.textContent = '';

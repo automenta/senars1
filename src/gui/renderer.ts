@@ -148,7 +148,7 @@ export class Renderer {
     private async get_cognitive_metrics() {
         const activeTasks = await this.get_active_thoughts();
         const activeTaskCount = activeTasks.length;
-        const completedBeliefs = Array.from(this.gui.world_model.tasks.values()).filter(task => task.type === 'BELIEF').length;
+        const completedBeliefs = Object.values(this.gui.world_model.tasks).filter(task => task.type === 'BELIEF').length;
         const totalTasks = activeTaskCount + completedBeliefs;
         const focusLevel = totalTasks > 0 ? ((activeTaskCount / totalTasks) * 100).toFixed(0) : '0';
         const memoryItems = completedBeliefs;
@@ -198,10 +198,11 @@ export class Renderer {
     }
 
     private renderThoughtCard(task: GuiTask, isCompleted: boolean): string {
+        const isPinned = this.gui.app.is_task_pinned(task.id);
         const priorityClass = isCompleted ? 'completed' : this.getPriorityClass(task.attention.priority);
+        const pinnedClass = isPinned ? 'pinned' : '';
         const icon = this.getTaskIcon(task, isCompleted);
         const confidence = `Confidence: ${((task.truth?.confidence ?? 0) * 100).toFixed(0)}%`;
-        const isPinned = this.gui.app.is_task_pinned(task.id);
 
         let details: string[] = [];
 
@@ -264,7 +265,7 @@ export class Renderer {
         }
 
         return `
-      <div class="thought-card ${priorityClass}" data-task-id="${task.id}">
+      <div class="thought-card ${priorityClass} ${pinnedClass}" data-task-id="${task.id}">
         <div class="card-header">
             <h4>${icon} ${isPinned ? '📌' : ''}[${task.priority_text}] ${task.content}</h4>
             ${!isCompleted ? feedbackActions : ''}

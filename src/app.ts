@@ -37,6 +37,10 @@ export class App {
     return this.engine.last_scope_task;
   }
 
+  public get_config(): Config {
+    return this.config;
+  }
+
   private constructor(config: Config, seedData: boolean = true) {
     this.config = config;
     this.attention_policy = new DefaultAttentionPolicy();

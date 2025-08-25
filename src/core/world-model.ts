@@ -105,13 +105,20 @@ export class WorldModel {
 
   async remove_task(task_id: UUID): Promise<void> {
     await this.mutex.runExclusive(async () => {
-      const task = this.tasks[task_id];
-      if (!task) {
+      const task_to_remove = this.tasks[task_id];
+      if (!task_to_remove) {
         return;
       }
 
-      const atom_id_to_remove = task.atom_id;
+      const atom_id_to_remove = task_to_remove.atom_id;
       delete this.tasks[task_id];
+
+      // Clean up references to this task in other tasks
+      for (const task of Object.values(this.tasks)) {
+        if (task.stamp.parent_ids.includes(task_id)) {
+          task.stamp.parent_ids = task.stamp.parent_ids.filter(id => id !== task_id);
+        }
+      }
 
       // Check if any other task uses the same atom
       const is_atom_used_elsewhere = Object.values(this.tasks).some(

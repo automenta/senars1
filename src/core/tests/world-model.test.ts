@@ -196,5 +196,29 @@ describe('WorldModel', () => {
       expect(worldModel.schema_index.has(schemaPattern, schemaAtom.id)).toBe(false);
       expect(worldModel.atoms[schemaAtom.id]).toBeUndefined();
     });
+
+    it('should remove parent_id references from child tasks when a parent task is removed', async () => {
+      // 1. Create a parent and child task
+      const parentAtom = create_atom('parent');
+      const parentTask = create_task(parentAtom.id);
+      await worldModel.add_atom(parentAtom);
+      await worldModel.add_task(parentTask);
+
+      const childAtom = create_atom('child');
+      const childTask = create_task(childAtom.id);
+      childTask.stamp.parent_ids = [parentTask.id]; // Link child to parent
+      await worldModel.add_atom(childAtom);
+      await worldModel.add_task(childTask);
+
+      // 2. Verify the link exists
+      expect(worldModel.tasks[childTask.id].stamp.parent_ids).toContain(parentTask.id);
+
+      // 3. Remove the parent task
+      await worldModel.remove_task(parentTask.id);
+
+      // 4. Verify the link is gone
+      expect(worldModel.tasks[childTask.id].stamp.parent_ids).not.toContain(parentTask.id);
+      expect(worldModel.tasks[childTask.id].stamp.parent_ids).toEqual([]);
+    });
   });
 });

@@ -1,37 +1,57 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { loadConfig } from '../config';
 
+// Mock storage
+let mockStorage: Record<string, string> = {};
+
+const mockLocalStorage = {
+    getItem: (key: string) => mockStorage[key] || null,
+    setItem: (key: string, value: string) => {
+        mockStorage[key] = value;
+    },
+    clear: () => {
+        mockStorage = {};
+    }
+};
+
 describe('loadConfig', () => {
     const originalFetch = global.fetch;
-    // Vitest runs in Node, where `window` is undefined. We save the original state.
-    const originalWindow = (global as any).window;
+    const originalLocalStorage = (global as any).localStorage;
 
     beforeEach(() => {
+        // Clear mocks and storage before each test
+        vi.resetAllMocks();
+        mockLocalStorage.clear();
+
         // Mock a browser environment for these tests
-        (global as any).window = {
-            fetch: vi.fn()
-        };
-        global.fetch = (global as any).window.fetch;
+        vi.stubGlobal('fetch', vi.fn());
+        vi.stubGlobal('localStorage', mockLocalStorage);
     });
 
     afterEach(() => {
-        // Restore the original environment
-        vi.restoreAllMocks();
-        global.fetch = originalFetch;
-        (global as any).window = originalWindow;
+        // Restore original globals
+        vi.unstubAllGlobals();
     });
 
-    it('should load the default config if config.json is not found', async () => {
-        (fetch as any).mockResolvedValue({ ok: false });
+    it('should load config from localStorage if it exists', async () => {
+        const storedConfig = {
+            apiKey: 'local-key',
+            modelName: 'local-model'
+        };
+        mockLocalStorage.setItem('llm_config', JSON.stringify(storedConfig));
 
         const config = await loadConfig();
-        expect(config.llm.provider).toBe('openai');
-        expect(config.llm.modelName).toBe('gpt-4');
-        expect(fetch).toHaveBeenCalledWith('/config.json');
+
+        expect(config.llm.apiKey).toBe('local-key');
+        expect(config.llm.modelName).toBe('local-model');
+        // max_tokens should be merged from the default config
+        expect(config.llm.max_tokens).toBe(150);
+        // fetch should not be called
+        expect(fetch).not.toHaveBeenCalled();
     });
 
-    it('should load the config from config.json if it exists', async () => {
-        const mockConfig = {
+    it('should fall back to config.json if localStorage is empty', async () => {
+        const mockJsonConfig = {
             llm: {
                 provider: 'test_provider',
                 modelName: 'test_model',
@@ -40,30 +60,38 @@ describe('loadConfig', () => {
         };
         (fetch as any).mockResolvedValue({
             ok: true,
-            json: () => Promise.resolve(mockConfig),
+            json: () => Promise.resolve(mockJsonConfig),
         });
 
         const config = await loadConfig();
+
+        expect(fetch).toHaveBeenCalledWith('/config.json');
         expect(config.llm.provider).toBe('test_provider');
         expect(config.llm.modelName).toBe('test_model');
-        expect(config.llm.apiKey).toBe('test_key');
-        // max_tokens should be from default config
-        expect(config.llm.max_tokens).toBe(150);
     });
 
-    it('should use default config if config.json is malformed', async () => {
-        (fetch as any).mockResolvedValue({
-            ok: true,
-            json: () => Promise.reject(new Error('Malformed JSON')),
-        });
+    it('should use default config if both localStorage and config.json are unavailable', async () => {
+        (fetch as any).mockResolvedValue({ ok: false });
+
+        const config = await loadConfig();
+
+        expect(fetch).toHaveBeenCalledWith('/config.json');
+        expect(config.llm.provider).toBe('openai');
+        expect(config.llm.modelName).toBe('gpt-4');
+        expect(config.llm.apiKey).toBe('');
+    });
+
+    it('should use default config if localStorage is malformed', async () => {
+        mockLocalStorage.setItem('llm_config', 'not a valid json');
+        (fetch as any).mockResolvedValue({ ok: false }); // also make fetch fail
 
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         const config = await loadConfig();
-        expect(config.llm.provider).toBe('openai');
-        expect(config.llm.modelName).toBe('gpt-4');
 
         expect(consoleErrorSpy).toHaveBeenCalled();
+        expect(config.llm.provider).toBe('openai');
+        expect(config.llm.modelName).toBe('gpt-4');
         consoleErrorSpy.mockRestore();
     });
 });
