@@ -1,0 +1,36 @@
+/* Default visibility: hide elements meant for specific modes */
+.learning-only,
+.expert-only,
+.debugger-only {
+  display: none;
+}
+
+/* Thinking Mode (Default) */
+/* No special rules needed, as it shows the base elements */
+
+/* Learning Mode */
+.container[data-mode="learning"] .learning-only {
+  display: block;
+}
+.container[data-mode="learning"] .expert-only {
+  display: none;
+}
+.container[data-mode="learning"] .debugger-only {
+  display: none;
+}
+
+/* Expert Mode */
+.container[data-mode="expert"] .learning-only,
+.container[data-mode="expert"] .expert-only {
+  display: block;
+}
+.container[data-mode="expert"] .debugger-only {
+  display: none;
+}
+
+/* Debugger Mode */
+.container[data-mode="debugger"] .learning-only,
+.container[data-mode="debugger"] .expert-only,
+.container[data-mode="debugger"] .debugger-only {
+  display: block;
+}

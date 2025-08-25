@@ -11,37 +11,15 @@ export class Renderer {
     }
 
     public async render() {
-        const activeTasks = await this.get_active_thoughts();
-        const completedTasks = this.get_completed_thoughts();
+        await this.gui.activeThoughtsComponent.render();
+        this.gui.completedThoughtsComponent.render();
 
-        this.gui.activeThoughtsList.innerHTML = activeTasks.map(t => this.renderThoughtCard(t, false)).join('');
-        this.gui.completedThoughtsList.innerHTML = completedTasks.map(t => this.renderThoughtCard(t, true)).join('');
-
-        await this.renderMetrics();
+        await this.gui.metricsComponent.render();
         this.render_schemas();
         this.render_scope_debugger();
 
         // Emit render_complete event so other modules can react
         this.gui.app.emit('render_complete', {});
-    }
-
-    public add_thought_card(task: GuiTask, isCompleted: boolean) {
-        const list = isCompleted ? this.gui.completedThoughtsList : this.gui.activeThoughtsList;
-        const cardHTML = this.renderThoughtCard(task, isCompleted);
-        list.insertAdjacentHTML('afterbegin', cardHTML);
-        this.gui.app.emit('render_complete', {}); // For gestures
-    }
-
-    public remove_thought_card(taskId: string) {
-        const card = document.querySelector(`.thought-card[data-task-id="${taskId}"]`);
-        if (card) {
-            card.remove();
-        }
-    }
-
-    public update_thought_card(task: GuiTask, isCompleted: boolean) {
-        this.remove_thought_card(task.id);
-        this.add_thought_card(task, isCompleted);
     }
 
     private render_scope_debugger() {
@@ -108,7 +86,7 @@ export class Renderer {
     private get_priority_text = (priority: number): string =>
         priority > 0.75 ? 'HIGH' : priority > 0.5 ? 'MEDIUM' : 'LOW';
 
-    private map_task_to_gui_task(task: any): GuiTask {
+    public map_task_to_gui_task(task: any): GuiTask {
         const atom = this.gui.world_model.get_atom(task.atom_id);
         const path_history = (task.stamp.path && task.stamp.path.length > 0)
             ? [...task.stamp.path, atom.content].join(' → ')
@@ -152,49 +130,7 @@ export class Renderer {
         return guiTask;
     }
 
-    private async get_active_thoughts(): Promise<GuiTask[]> {
-        const tasks = await this.gui.agenda.get_all_tasks();
-        return tasks.map(task => this.map_task_to_gui_task(task));
-    }
 
-    private get_completed_thoughts(): GuiTask[] {
-        return Object.values(this.gui.world_model.tasks)
-            .filter(task => task.type === 'BELIEF')
-            .map(t => this.map_task_to_gui_task(t));
-    }
-
-    private async get_cognitive_metrics() {
-        const activeTasks = await this.get_active_thoughts();
-        const activeTaskCount = activeTasks.length;
-        const completedBeliefs = Object.values(this.gui.world_model.tasks).filter(task => task.type === 'BELIEF').length;
-        const totalTasks = activeTaskCount + completedBeliefs;
-        const focusLevel = totalTasks > 0 ? ((activeTaskCount / totalTasks) * 100).toFixed(0) : '0';
-        const memoryItems = completedBeliefs;
-
-        let energyLevel = 0;
-        const priorityDistribution = { high: 0, medium: 0, low: 0 };
-
-        if (activeTaskCount > 0) {
-            const totalPriority = activeTasks.reduce((sum, task) => {
-                if (task.attention.priority > 0.75) priorityDistribution.high++;
-                else if (task.attention.priority > 0.5) priorityDistribution.medium++;
-                else priorityDistribution.low++;
-                return sum + task.attention.priority;
-            }, 0);
-            energyLevel = (totalPriority / activeTaskCount) * 100;
-        }
-
-        const energyTrend = energyLevel > this.gui.lastEnergyLevel ? '↗' : energyLevel < this.gui.lastEnergyLevel ? '↘' : '→';
-        this.gui.lastEnergyLevel = energyLevel;
-
-        return {
-            focus: `${focusLevel}%`,
-            active_thoughts: activeTaskCount,
-            memory: `${memoryItems}`,
-            energy_trend: energyTrend,
-            priority_distribution: priorityDistribution,
-        };
-    }
 
     private getPriorityClass(priority: number): string {
         if (priority > 0.75) return 'priority-high';
@@ -215,8 +151,8 @@ export class Renderer {
         }
     }
 
-    private renderThoughtCard(task: GuiTask, isCompleted: boolean): string {
-        const isPinned = this.gui.app.is_task_pinned(task.id);
+    renderThoughtCard(task: GuiTask, isCompleted: boolean): string {
+        const isPinned = this.gui.is_task_pinned(task.id);
         const priorityClass = isCompleted ? 'completed' : this.getPriorityClass(task.attention.priority);
         const pinnedClass = isPinned ? 'pinned' : '';
         const icon = this.getTaskIcon(task, isCompleted);
@@ -238,9 +174,7 @@ export class Renderer {
                 `<p>• ${confidence}</p>`,
                 `<p>• Source: ${task.source || 'N/A'} | Completed: ${task.completed_ago || 'N/A'}</p>`,
             ];
-            if (this.gui.currentMode !== 'thinking') {
-                details.push(task.path_history ? `<p>• Path: ${task.path_history}</p>` : '');
-            }
+            details.push(task.path_history ? `<p class="learning-only">• Path: ${task.path_history}</p>` : '');
             details.push(
                 `<p>• Verified by: ${task.verification_status || 'N/A'}</p>`,
                 `<p>• Knowledge Retention: ${task.knowledge_retention || 'N/A'}</p>`
@@ -250,21 +184,15 @@ export class Renderer {
                 `<p>• Priority: <strong>${task.priority_text}</strong> | ${confidence}</p>`,
                 task.next_step ? `<p>• Next step: ${task.next_step}</p>` : '',
             ];
-            if (this.gui.currentMode !== 'thinking') {
-                details.push(task.related_to ? `<p>• Related to: ${task.related_to}</p>` : '');
-                details.push(task.path_history ? `<p>• Path: ${task.path_history}</p>` : '');
-            }
+            details.push(task.related_to ? `<p class="learning-only">• Related to: ${task.related_to}</p>` : '');
+            details.push(task.path_history ? `<p class="learning-only">• Path: ${task.path_history}</p>` : '');
             details.push(`<p>• Created: ${task.created_ago || 'N/A'} | Retains for: ${task.retains_for || 'N/A'}</p>`);
         }
 
-        if (this.gui.currentMode === 'expert' || this.gui.currentMode === 'debugger') {
-            details.push(`<p>• Truth: f=${task.truth?.frequency.toFixed(2)}, c=${task.truth?.confidence.toFixed(2)}</p>`);
-            details.push(`<p>• Attention: p=${task.attention.priority.toFixed(2)}, d=${task.attention.durability.toFixed(2)}</p>`);
-        }
-        if (this.gui.currentMode === 'debugger') {
-            details.push(`<p>• Task ID: ${task.id}</p>`);
-            details.push(`<p>• Atom ID: ${task.atom_id}</p>`);
-        }
+        details.push(`<p class="expert-only">• Truth: f=${task.truth?.frequency.toFixed(2)}, c=${task.truth?.confidence.toFixed(2)}</p>`);
+        details.push(`<p class="expert-only">• Attention: p=${task.attention.priority.toFixed(2)}, d=${task.attention.durability.toFixed(2)}</p>`);
+        details.push(`<p class="debugger-only">• Task ID: ${task.id}</p>`);
+        details.push(`<p class="debugger-only">• Atom ID: ${task.atom_id}</p>`);
 
         const feedbackActions = `
       <div class="feedback-actions">
@@ -293,24 +221,6 @@ export class Renderer {
     `;
     }
 
-    private async renderMetrics() {
-        const metrics = await this.get_cognitive_metrics();
-        const totalActive = metrics.active_thoughts;
-
-        this.gui.focusMetric.textContent = metrics.focus;
-        this.gui.activeThoughtsMetric.textContent = String(metrics.active_thoughts);
-        this.gui.memoryMetric.textContent = metrics.memory;
-        this.gui.energyTrendMetric.textContent = metrics.energy_trend;
-
-        const dist = metrics.priority_distribution;
-        this.gui.highPriorityBar.style.width = totalActive > 0 ? `${(dist.high / totalActive) * 100}%` : '0%';
-        this.gui.medPriorityBar.style.width = totalActive > 0 ? `${(dist.medium / totalActive) * 100}%` : '0%';
-        this.gui.lowPriorityBar.style.width = totalActive > 0 ? `${(dist.low / totalActive) * 100}%` : '0%';
-
-        this.gui.highPriorityValue.textContent = `${dist.high} items`;
-        this.gui.medPriorityValue.textContent = `${dist.medium} items`;
-        this.gui.lowPriorityValue.textContent = `${dist.low} items`;
-    }
 
     public render_suggestion(question: string) {
         const container = document.getElementById('suggestion-container');

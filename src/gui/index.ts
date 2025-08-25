@@ -10,6 +10,12 @@ import { parseScopeExpression, substituteInContent } from '../core/scope';
 import { GuiTask } from './types';
 import { Renderer } from './renderer';
 import { EventListeners } from './event-listeners';
+import { EventBus } from './EventBus';
+import { SettingsModalComponent } from './components/SettingsModalComponent';
+import { NotificationComponent } from './components/NotificationComponent';
+import { MetricsComponent } from './components/MetricsComponent';
+import { ActiveThoughtsComponent } from './components/ActiveThoughtsComponent';
+import { CompletedThoughtsComponent } from './components/CompletedThoughtsComponent';
 
 export class Gui {
   world_model: WorldModel;
@@ -17,115 +23,89 @@ export class Gui {
   schema_registry: SchemaRegistry;
   app: App;
   renderer: Renderer;
+  event_bus: EventBus;
   event_listeners: EventListeners;
+  settingsModalComponent: SettingsModalComponent;
+  notificationComponent: NotificationComponent;
+  metricsComponent: MetricsComponent;
+  activeThoughtsComponent: ActiveThoughtsComponent;
+  completedThoughtsComponent: CompletedThoughtsComponent;
 
   // DOM Elements
-  activeThoughtsList: HTMLElement;
-  completedThoughtsList: HTMLElement;
   schemaList: HTMLElement;
   scopeDebugger: HTMLElement;
-  focusMetric: HTMLElement;
-  activeThoughtsMetric: HTMLElement;
-  memoryMetric: HTMLElement;
-  energyTrendMetric: HTMLElement;
-  highPriorityBar: HTMLElement;
-  medPriorityBar: HTMLElement;
-  lowPriorityBar: HTMLElement;
-  highPriorityValue: HTMLElement;
-  medPriorityValue: HTMLElement;
-  lowPriorityValue: HTMLElement;
   newThoughtInput: HTMLInputElement;
   addNewThoughtButton: HTMLElement;
-  settingsBtn: HTMLElement;
-  settingsModal: HTMLElement;
-  closeModalBtn: HTMLElement;
   userModeSelect: HTMLSelectElement;
   container: HTMLElement;
-  llmApiKeyInput: HTMLInputElement;
-  llmModelNameInput: HTMLInputElement;
-  saveLlmConfigBtn: HTMLElement;
-  llmConfigStatus: HTMLElement;
 
-  currentMode: string = 'thinking';
+  state: {
+    currentMode: string;
+    pinnedTaskIds: Set<string>;
+  };
   lastEnergyLevel: number = 0;
 
   constructor(app: App, world_model: WorldModel, agenda: Agenda, schema_registry: SchemaRegistry) {
+    this.state = {
+      currentMode: 'thinking',
+      pinnedTaskIds: new Set(),
+    };
     this.app = app;
     this.world_model = world_model;
     this.agenda = agenda;
     this.schema_registry = schema_registry;
+    this.event_bus = new EventBus();
     this.renderer = new Renderer(this);
     this.event_listeners = new EventListeners(this);
+    this.notificationComponent = new NotificationComponent();
+    this.settingsModalComponent = new SettingsModalComponent(this);
+    this.metricsComponent = new MetricsComponent(this);
+    this.activeThoughtsComponent = new ActiveThoughtsComponent(this);
+    this.completedThoughtsComponent = new CompletedThoughtsComponent(this);
 
     // Cache all DOM element selections
-    this.activeThoughtsList = document.getElementById('active-thoughts-list')!;
-    this.completedThoughtsList = document.getElementById('completed-thoughts-list')!;
     this.schemaList = document.getElementById('schema-list')!;
     this.scopeDebugger = document.getElementById('scope-debugger-content')!;
-    this.focusMetric = document.getElementById('focus-metric')!;
-    this.activeThoughtsMetric = document.getElementById('active-thoughts-metric')!;
-    this.memoryMetric = document.getElementById('memory-metric')!;
-    this.energyTrendMetric = document.getElementById('energy-trend-metric')!;
-    this.highPriorityBar = document.getElementById('high-priority-bar')!;
-    this.medPriorityBar = document.getElementById('med-priority-bar')!;
-    this.lowPriorityBar = document.getElementById('low-priority-bar')!;
-    this.highPriorityValue = document.getElementById('high-priority-value')!;
-    this.medPriorityValue = document.getElementById('med-priority-value')!;
-    this.lowPriorityValue = document.getElementById('low-priority-value')!;
     this.newThoughtInput = document.getElementById('new-thought-input') as HTMLInputElement;
     this.addNewThoughtButton = document.getElementById('add-new-thought-button')!;
-    this.settingsBtn = document.getElementById('settings-btn')!;
-    this.settingsModal = document.getElementById('settings-modal')!;
-    this.closeModalBtn = this.settingsModal.querySelector('.close-btn')!;
     this.userModeSelect = document.getElementById('user-mode-select') as HTMLSelectElement;
     this.container = document.querySelector('.container')!;
-    this.llmApiKeyInput = document.getElementById('llm-api-key') as HTMLInputElement;
-    this.llmModelNameInput = document.getElementById('llm-model-name') as HTMLInputElement;
-    this.saveLlmConfigBtn = document.getElementById('save-llm-config-btn')!;
-    this.llmConfigStatus = document.getElementById('llm-config-status')!;
   }
 
   public async init() {
     this.load_llm_config();
+    this.bind_app_events_to_gui_events();
     this.event_listeners.attach_event_listeners();
-    this.bind_to_app_events();
     await this.renderer.render();
-    this.app.emit('render_complete', {});
+    this.event_bus.emit('render_complete', {});
   }
 
-  private bind_to_app_events() {
-    this.app.on('task_added_to_agenda', (data: { task: Task }) => {
-        const guiTask = this.renderer['map_task_to_gui_task'](data.task);
-        this.renderer.add_thought_card(guiTask, false);
-        this.renderer['renderMetrics']();
+  private bind_app_events_to_gui_events() {
+    const events_to_forward = [
+        'task_added_to_agenda',
+        'task_removed_from_agenda',
+        'task_updated_in_agenda',
+        'belief_added_to_world_model',
+        'belief_updated_in_world_model',
+        'belief_removed_from_world_model',
+        'render_complete',
+        'suggestion_generated',
+        'user_thought_added'
+    ];
+
+    events_to_forward.forEach(event_name => {
+        this.app.on(event_name, (data: any) => {
+            // The data from app events can be structured like {task: ...} or just be the value itself.
+            // We unpack it if necessary.
+            const payload = data && typeof data === 'object' && Object.keys(data).length === 1 ? Object.values(data)[0] : data;
+            this.event_bus.emit(event_name, payload);
+        });
     });
 
-    this.app.on('task_removed_from_agenda', (data: { taskId: string }) => {
-        this.renderer.remove_thought_card(data.taskId);
-        this.renderer['renderMetrics']();
-    });
-
-    this.app.on('task_updated_in_agenda', (data: { task: Task }) => {
-        const guiTask = this.renderer['map_task_to_gui_task'](data.task);
-        this.renderer.update_thought_card(guiTask, false);
-        this.renderer['renderMetrics']();
-    });
-
-    this.app.on('belief_added_to_world_model', (data: { task: Task }) => {
-        const guiTask = this.renderer['map_task_to_gui_task'](data.task);
-        this.renderer.add_thought_card(guiTask, true);
-        this.renderer['renderMetrics']();
-    });
-
-    this.app.on('belief_updated_in_world_model', (data: { task: Task }) => {
-        const guiTask = this.renderer['map_task_to_gui_task'](data.task);
-        this.renderer.update_thought_card(guiTask, true);
-        this.renderer['renderMetrics']();
-    });
-
-    this.app.on('belief_removed_from_world_model', (data: { taskId: string }) => {
-        this.renderer.remove_thought_card(data.taskId);
-        this.renderer['renderMetrics']();
+    this.event_bus.on('user_thought_added', (data: { content: string, type: TaskType }) => {
+        if (data.type === 'BELIEF') {
+            this.app.generate_suggestion_for_belief(data.content);
+        }
     });
   }
 
@@ -134,14 +114,31 @@ export class Gui {
       if (configStr) {
           try {
             const config = JSON.parse(configStr);
-            this.llmApiKeyInput.value = config.apiKey || '';
-            this.llmModelNameInput.value = config.modelName || '';
             this.app.update_llm_config(config);
-            this.llmConfigStatus.textContent = 'Loaded saved configuration.';
           } catch (e) {
             console.error("Failed to parse LLM config from localStorage", e);
             localStorage.removeItem('llm_config');
           }
       }
+  }
+
+  public set_mode(mode: string) {
+    this.state.currentMode = mode;
+    this.container.dataset.mode = mode;
+    this.renderer.render();
+    this.event_bus.emit('mode_changed', mode);
+  }
+
+  public pin_task(taskId: string) {
+    if (this.state.pinnedTaskIds.has(taskId)) {
+      this.state.pinnedTaskIds.delete(taskId);
+    } else {
+      this.state.pinnedTaskIds.add(taskId);
+    }
+    this.renderer.render();
+  }
+
+  public is_task_pinned(taskId: string): boolean {
+    return this.state.pinnedTaskIds.has(taskId);
   }
 }

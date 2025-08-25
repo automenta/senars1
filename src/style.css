@@ -223,3 +223,41 @@ footer {
     flex-grow: 1;
   }
 }
+
+/* Notification System */
+#notification-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toast-notification {
+  padding: 15px 20px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1rem;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  opacity: 1;
+  transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+}
+
+.toast-notification.fade-out {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.toast-notification.success {
+  background-color: #28a745; /* Green */
+}
+
+.toast-notification.error {
+  background-color: #dc3545; /* Red */
+}
+
+.toast-notification.info {
+  background-color: #17a2b8; /* Blue */
+}

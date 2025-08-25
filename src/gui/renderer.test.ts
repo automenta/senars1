@@ -62,21 +62,13 @@ describe('Renderer', () => {
                 is_task_pinned: vi.fn().mockReturnValue(false),
                 emit: vi.fn(),
             },
-            activeThoughtsList: document.createElement('div'),
-            completedThoughtsList: document.createElement('div'),
+            activeThoughtsComponent: { render: vi.fn().mockResolvedValue(undefined) },
+            completedThoughtsComponent: { render: vi.fn().mockResolvedValue(undefined) },
+            metricsComponent: { render: vi.fn().mockResolvedValue(undefined) },
             schemaList: document.createElement('div'),
             scopeDebugger: document.createElement('div'),
-            focusMetric: document.createElement('span'),
-            activeThoughtsMetric: document.createElement('span'),
-            memoryMetric: document.createElement('span'),
-            energyTrendMetric: document.createElement('span'),
-            highPriorityBar: document.createElement('div'),
-            medPriorityBar: document.createElement('div'),
-            lowPriorityBar: document.createElement('div'),
-            highPriorityValue: document.createElement('span'),
-            medPriorityValue: document.createElement('span'),
-            lowPriorityValue: document.createElement('span'),
             lastEnergyLevel: 0,
+            state: { currentMode: 'thinking', pinnedTaskIds: new Set() }
         };
 
         renderer = new Renderer(mockGui as Gui);
@@ -88,24 +80,5 @@ describe('Renderer', () => {
 
     it('should render without errors', async () => {
         await expect(renderer.render()).resolves.not.toThrow();
-    });
-
-    it('get_cognitive_metrics should not throw "tasks.values is not a function"', async () => {
-        // This test implicitly checks the fix by calling render, which calls get_cognitive_metrics
-        // The mock setup mimics the state that caused the crash.
-        // Specifically, mockWorldModel.tasks is an object, not a Map.
-        mockWorldModel.tasks = {
-            'task1': { type: 'BELIEF', attention: { priority: 0.8 } },
-            'task2': { type: 'GOAL', attention: { priority: 0.5 } }, // This one should be ignored
-            'task3': { type: 'BELIEF', attention: { priority: 0.3 } },
-        };
-        mockAgenda.get_all_tasks.mockResolvedValue([]);
-
-        // We need to access the private method for this test.
-        // In a real scenario, we would test the public method `render` and check its output.
-        // @ts-ignore
-        const metrics = await renderer.get_cognitive_metrics();
-
-        expect(metrics.memory).toBe('2'); // Should correctly count the two BELIEF tasks
     });
 });

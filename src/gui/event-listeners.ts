@@ -19,10 +19,10 @@ export class EventListeners {
         this.gui.newThoughtInput.addEventListener('keydown', this.handle_new_thought_keypress.bind(this));
 
         // Listen for re-renders to attach gesture listeners
-        this.gui.app.on('render_complete', this.attach_gesture_listeners.bind(this));
+        this.gui.event_bus.on('render_complete', this.attach_gesture_listeners.bind(this));
 
-        this.gui.app.on('suggestion_generated', (data: { question: string }) => {
-            this.gui.renderer.render_suggestion(data.question);
+        this.gui.event_bus.on('suggestion_generated', (question: string) => {
+            this.gui.renderer.render_suggestion(question);
         });
     }
 
@@ -38,15 +38,6 @@ export class EventListeners {
         switch (action) {
             case 'add-new-thought':
                 await this.add_new_thought();
-                break;
-            case 'open-settings':
-                this.open_settings();
-                break;
-            case 'close-settings':
-                this.close_settings();
-                break;
-            case 'save-llm-config':
-                this.save_llm_config();
                 break;
             // Active Thought Actions
             case 'boost-task':
@@ -66,18 +57,17 @@ export class EventListeners {
                 if (task_id) await this.gui.app.star_belief(task_id);
                 break;
             case 'question-belief':
-                if (task_id) this.gui.app.question_belief(task_id);
+                if (task_id) this.question_belief(task_id);
                 break;
             case 'forget-belief':
-                if (task_id) this.gui.app.forget_belief(task_id);
+                if (task_id) this.forget_belief(task_id);
                 break;
         }
     }
 
     private async handle_user_mode_change(event: Event) {
-        this.gui.currentMode = (event.target as HTMLSelectElement).value;
-        this.gui.container.dataset.mode = this.gui.currentMode;
-        await this.gui.renderer.render(); // Keep this one as it's a global UI change
+        const newMode = (event.target as HTMLSelectElement).value;
+        this.gui.set_mode(newMode);
     }
 
     private async handle_new_thought_keypress(event: KeyboardEvent) {
@@ -89,43 +79,37 @@ export class EventListeners {
     private async add_new_thought() {
         const content = this.gui.newThoughtInput.value.trim();
         if (content) {
-            const type = content.endsWith('?') ? TaskType.GOAL : TaskType.BELIEF;
+            // More sophisticated type detection
+            const isGoal = content.endsWith('?') || /^(what|where|who|when|why|how|is|are|do|does)\s/i.test(content);
+            const type = isGoal ? TaskType.GOAL : TaskType.BELIEF;
+
             await this.gui.app.add_new_thought(content, type);
             this.gui.newThoughtInput.value = '';
-            // No need to render here, the event bus will handle it
+
+            // Emit an event that a thought was added by the user
+            this.gui.event_bus.emit('user_thought_added', { content, type });
         }
     }
 
-    private open_settings() {
-        const currentConfig = this.gui.app.get_config().llm;
-        this.gui.llmApiKeyInput.value = currentConfig.apiKey || '';
-        this.gui.llmModelNameInput.value = currentConfig.modelName || '';
-        this.gui.settingsModal.style.display = 'block';
-    }
-
-    private close_settings() {
-        this.gui.settingsModal.style.display = 'none';
-    }
-
-    private save_llm_config() {
-        const config = {
-            apiKey: this.gui.llmApiKeyInput.value,
-            modelName: this.gui.llmModelNameInput.value
-        };
-        if (!config.apiKey || !config.modelName) {
-            this.gui.llmConfigStatus.textContent = 'API Key and Model Name are required.';
-            this.gui.llmConfigStatus.style.color = 'red';
-            return;
+    private question_belief(task_id: string) {
+        const belief_task = this.gui.world_model.get_task(task_id);
+        const belief_content = this.gui.world_model.get_atom(belief_task.atom_id).content;
+        const question = prompt(`What about "${belief_content}" do you question?`, `Why is "${belief_content}" true?`);
+        if (question) {
+            this.gui.app.add_new_thought(question, TaskType.GOAL);
+            this.gui.notificationComponent.show('Question added to active thoughts!', 'info');
         }
-        localStorage.setItem('llm_config', JSON.stringify(config));
-        this.gui.app.update_llm_config(config);
-        this.gui.llmConfigStatus.textContent = 'Configuration saved!';
-        this.gui.llmConfigStatus.style.color = 'green';
-        setTimeout(() => {
-            this.gui.llmConfigStatus.textContent = '';
-            this.close_settings();
-        }, 1500);
     }
+
+    private forget_belief(task_id: string) {
+        const belief_task = this.gui.world_model.get_task(task_id);
+        const belief_content = this.gui.world_model.get_atom(belief_task.atom_id).content;
+        if (confirm(`Are you sure you want to forget the belief: "${belief_content}"?`)) {
+            this.gui.app.forget_belief(task_id);
+            this.gui.notificationComponent.show('Belief forgotten.', 'info');
+        }
+    }
+
 
     private attach_gesture_listeners() {
         const cards = document.querySelectorAll('.thought-card');
@@ -137,8 +121,8 @@ export class EventListeners {
             const taskId = element.dataset.taskId;
             if (!taskId) return;
 
-            hammer.on('press', async () => {
-                await this.gui.app.pin_task(taskId);
+            hammer.on('press', () => {
+                this.gui.pin_task(taskId);
             });
 
             hammer.on('swiperight', async () => {
