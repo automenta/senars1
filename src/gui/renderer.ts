@@ -13,6 +13,7 @@ export class Renderer {
     public async render() {
         await this.gui.activeThoughtsComponent.render();
         this.gui.completedThoughtsComponent.render();
+        this.gui.memoryComponent.render();
 
         await this.gui.metricsComponent.render();
         this.render_schemas();
