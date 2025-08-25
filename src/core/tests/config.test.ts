@@ -3,14 +3,22 @@ import { loadConfig } from '../config';
 
 describe('loadConfig', () => {
     const originalFetch = global.fetch;
+    // Vitest runs in Node, where `window` is undefined. We save the original state.
+    const originalWindow = (global as any).window;
 
     beforeEach(() => {
-        global.fetch = vi.fn();
+        // Mock a browser environment for these tests
+        (global as any).window = {
+            fetch: vi.fn()
+        };
+        global.fetch = (global as any).window.fetch;
     });
 
     afterEach(() => {
+        // Restore the original environment
         vi.restoreAllMocks();
         global.fetch = originalFetch;
+        (global as any).window = originalWindow;
     });
 
     it('should load the default config if config.json is not found', async () => {

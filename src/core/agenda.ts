@@ -17,9 +17,25 @@ export class Agenda {
     this.last_decay_timestamp = Date.now() / 1000;
   }
 
+  /**
+   * Safely drains the queue and returns all tasks.
+   * This is the only reliable way to iterate over the contents of `ts-priority-queue`.
+   * NOTE: This method leaves the queue empty.
+   */
+  private _drain_queue(): Task[] {
+    const tasks: Task[] = [];
+    while (this.queue.length > 0) {
+      tasks.push(this.queue.dequeue());
+    }
+    return tasks;
+  }
+
   async push(task: Task): Promise<void> {
     const release = await this.mutex.acquire();
     try {
+      if (this.tasks_map.has(task.id)) {
+        return;
+      }
       this.queue.queue(task);
       this.tasks_map.set(task.id, task);
     } finally {
@@ -83,18 +99,15 @@ export class Agenda {
         const task = this.tasks_map.get(taskId);
         if (task) {
             task.attention.priority = newPriority;
-            // Re-insert to update priority
-            const newQueue = new PriorityQueueLib({
-                comparator: (a: Task, b: Task) => b.attention.priority - a.attention.priority,
-            });
-            this.queue.toArray().forEach(t => {
+
+            const all_tasks = this._drain_queue();
+            all_tasks.forEach(t => {
                 if (t.id === taskId) {
-                    newQueue.queue(task);
+                    this.queue.queue(task); // queue the updated task
                 } else {
-                    newQueue.queue(t);
+                    this.queue.queue(t);
                 }
             });
-            this.queue = newQueue;
         }
     } finally {
       release();
@@ -108,20 +121,24 @@ export class Agenda {
       const elapsed = now - this.last_decay_timestamp;
       if (elapsed <= 0) return;
 
-      const tasksToRebuild: Task[] = [];
-      for (const task of this.tasks_map.values()) {
+      const all_tasks = this._drain_queue();
+      const decayed_tasks: Task[] = [];
+
+      for (const task of all_tasks) {
         if (!this.is_task_pinned(task.id)) {
-            task.attention = attention_policy.decay(task, elapsed);
+            const new_attention = attention_policy.decay(task, elapsed);
+            decayed_tasks.push({ ...task, attention: new_attention });
+        } else {
+            decayed_tasks.push(task);
         }
-        tasksToRebuild.push(task);
       }
 
-      // Rebuild the priority queue
-      const newQueue = new PriorityQueueLib({
-        comparator: (a: Task, b: Task) => b.attention.priority - a.attention.priority,
+      // Rebuild the priority queue and the map
+      this.tasks_map.clear();
+      decayed_tasks.forEach(t => {
+        this.queue.queue(t);
+        this.tasks_map.set(t.id, t);
       });
-      tasksToRebuild.forEach(t => newQueue.queue(t));
-      this.queue = newQueue;
 
       this.last_decay_timestamp = now;
     } finally {
@@ -144,11 +161,10 @@ export class Agenda {
   async get_all_tasks(): Promise<Task[]> {
     const release = await this.mutex.acquire();
     try {
-      // The 'ts-priority-queue' library does not have a public 'toArray' method.
-      // We access the internal heap array for read-only purposes.
-      // This is a potential point of failure if the library changes its internal structure.
-      const internal_heap = (this.queue as any).heap;
-      return internal_heap ? [...internal_heap] : [];
+      const all_tasks = this._drain_queue();
+      // Re-queue them since this is a read-only operation
+      all_tasks.forEach(t => this.queue.queue(t));
+      return all_tasks;
     } finally {
       release();
     }

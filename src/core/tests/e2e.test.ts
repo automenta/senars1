@@ -21,7 +21,7 @@ class MockLLMHandler implements ProcedureHandler {
             const atom = {
                 id: uuidv4(),
                 content: '(is_toxic chocolate cat)',
-                embedding: [0.5, 0.5, 0.6], // Similar embedding
+                embedding: [0.5, 0.5, 0.6],
             };
             await world_model.add_atom(atom);
             return [{
@@ -96,7 +96,6 @@ describe('SeNARS End-to-End Test', () => {
     app = await App.create(false);
     app.schema_registry.register(new SafetyAnalysisSchema());
     app.schema_registry.register(new SafetyConclusionSchema());
-    // Manually replace the handler
     (app as any).procedure_handlers['llm'] = new MockLLMHandler();
   });
 
@@ -107,13 +106,18 @@ describe('SeNARS End-to-End Test', () => {
     await app.add_new_thought('(eats cat chocolate)', TaskType.BELIEF);
     await app.add_new_thought('(is_safe_for cat chocolate)', TaskType.GOAL);
 
+    // 4 ticks are required to complete the reasoning chain.
+    // 1. Process (eats...)
+    // 2. Process (is_safe...) -> creates procedure
+    // 3. Process procedure -> creates (is_toxic...)
+    // 4. Process (is_toxic...) -> creates alert
     for (let i = 0; i < 4; i++) {
         await app.tick();
     }
 
-    const agenda_tasks = await app.agenda.get_all_tasks();
-    const world_model_tasks = Object.values(app.world_model.tasks);
-    const all_tasks = [...agenda_tasks, ...world_model_tasks];
+    const final_agenda_tasks = await app.agenda.get_all_tasks();
+    const final_world_model_tasks = Object.values(app.world_model.tasks);
+    const all_tasks = [...final_agenda_tasks, ...final_world_model_tasks];
 
     const get_content = (task: Task) => app.world_model.get_atom(task.atom_id).content;
 
