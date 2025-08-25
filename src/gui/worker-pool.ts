@@ -1,4 +1,4 @@
-import { App } from '../app';
+import { GuiManager } from './gui-manager';
 import { Task } from '../core/models';
 import { WorldModel } from '../core/world-model';
 
@@ -12,7 +12,7 @@ interface WorkerState {
  * Manages a pool of Web Workers to process cognitive cycles in parallel.
  */
 export class WorkerPool {
-    private app: App;
+    private guiManager: GuiManager;
     private pool: WorkerState[] = [];
     private workerScriptUrl: string;
     private desiredSize: number;
@@ -24,15 +24,15 @@ export class WorkerPool {
     private lastTpsResetTimestamp: number = Date.now();
     private lastTpsValue: number = 0;
 
-    constructor(app: App, workerScriptUrl: string, size: number = 1) {
-        this.app = app;
+    constructor(guiManager: GuiManager, workerScriptUrl: string, size: number = 1) {
+        this.guiManager = guiManager;
         this.workerScriptUrl = workerScriptUrl;
         this.desiredSize = size;
 
         // Listen for when a belief is added to the main world model
         // so we can broadcast the updated state to all workers.
-        this.app.on('belief_added_to_world_model', () => this.broadcastWorldModel());
-        this.app.on('belief_updated_in_world_model', () => this.broadcastWorldModel());
+        this.guiManager.on('belief_added_to_world_model', () => this.broadcastWorldModel());
+        this.guiManager.on('belief_updated_in_world_model', () => this.broadcastWorldModel());
     }
 
     /**
@@ -70,7 +70,7 @@ export class WorkerPool {
             };
 
             // Send the configuration needed for the worker to initialize its own engine
-            const config = this.app.get_config();
+            const config = this.guiManager.app.get_config();
             worker.postMessage({ type: 'init', payload: { config } });
         });
     }
@@ -107,7 +107,7 @@ export class WorkerPool {
         this.completedTasksCounter++;
         console.log(`Worker result: Got ${payload.derivedTasks.length} derived tasks from parent ${payload.parentTaskId}`);
         for (const task of payload.derivedTasks) {
-            await this.app.agenda.push(task);
+            await this.guiManager.app.agenda.push(task);
         }
     }
 
@@ -132,8 +132,8 @@ export class WorkerPool {
      */
     public broadcastWorldModel(worker?: Worker) {
         const snapshot = {
-            atoms: this.app.world_model.atoms,
-            tasks: this.app.world_model.tasks, // Only BELIEFS are in the world model tasks
+            atoms: this.guiManager.app.world_model.atoms,
+            tasks: this.guiManager.app.world_model.tasks, // Only BELIEFS are in the world model tasks
         };
         const message = { type: 'update_world_model', payload: snapshot };
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { App } from '../../app';
 import { Gui } from '../../gui';
+import { GuiManager } from '../../gui/gui-manager';
 import { Task } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import { TaskType } from '../types';
@@ -51,6 +52,7 @@ class MockWorker {
 describe('Parallel Executor IntegrationTest', () => {
   let app: App;
   let gui: Gui;
+  let guiManager: GuiManager;
 
   beforeEach(async () => {
     vi.stubGlobal('Worker', MockWorker);
@@ -60,7 +62,8 @@ describe('Parallel Executor IntegrationTest', () => {
     document.body.innerHTML = html;
 
     app = await App.create(false); // Create app without seed data
-    gui = new Gui(app, app.world_model, app.agenda, app.schema_registry);
+    guiManager = new GuiManager(app);
+    gui = new Gui(guiManager, app.world_model, app.agenda, app.schema_registry);
     await gui.init();
   });
 

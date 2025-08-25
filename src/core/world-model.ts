@@ -5,11 +5,11 @@ import { IResonanceStrategy, ITruthPolicy, VectorDB, PatternMatcher, ICognitiveS
 import { SchemaRegistry } from './schema-registry';
 import { InMemoryVectorDB, InMemoryPatternMatcher } from './implementations';
 import { is_schema_pattern } from './utils';
-import { App } from '../app';
+import { EventBus } from '../gui/EventBus';
 
 
 export class WorldModel {
-  private app: App;
+  private eventBus: EventBus;
   private resonance: IResonanceStrategy;
   private truth_policy: ITruthPolicy;
   private schema_registry: SchemaRegistry;
@@ -20,8 +20,8 @@ export class WorldModel {
   public schema_index: PatternMatcher;
   private mutex: Mutex;
 
-  constructor(app: App, resonance: IResonanceStrategy, truth_policy: ITruthPolicy, schema_registry: SchemaRegistry, schema_index?: PatternMatcher) {
-    this.app = app;
+  constructor(eventBus: EventBus, resonance: IResonanceStrategy, truth_policy: ITruthPolicy, schema_registry: SchemaRegistry, schema_index?: PatternMatcher) {
+    this.eventBus = eventBus;
     this.resonance = resonance;
     this.truth_policy = truth_policy;
     this.schema_registry = schema_registry;
@@ -59,13 +59,13 @@ export class WorldModel {
           existing.truth = this.truth_policy.revision(existing, task);
           // Also update attention, as the new task might have higher priority
           existing.attention = task.attention;
-          this.app.emit('belief_updated_in_world_model', { task: existing });
+          this.eventBus.emit('belief_updated_in_world_model', { task: existing });
           return;
         }
       }
       this.tasks[task.id] = task;
       if (task.type === 'BELIEF') {
-        this.app.emit('belief_added_to_world_model', { task });
+        this.eventBus.emit('belief_added_to_world_model', { task });
       }
     });
   }
@@ -120,7 +120,7 @@ export class WorldModel {
       const atom_id_to_remove = task_to_remove.atom_id;
       delete this.tasks[task_id];
       if (task_to_remove.type === 'BELIEF') {
-        this.app.emit('belief_removed_from_world_model', { taskId: task_id });
+        this.eventBus.emit('belief_removed_from_world_model', { taskId: task_id });
       }
 
       // Clean up references to this task in other tasks

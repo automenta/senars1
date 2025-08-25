@@ -64,6 +64,7 @@ describe('Renderer', () => {
             },
             activeThoughtsComponent: { render: vi.fn().mockResolvedValue(undefined) },
             completedThoughtsComponent: { render: vi.fn().mockResolvedValue(undefined) },
+            memoryComponent: { render: vi.fn().mockResolvedValue(undefined) },
             metricsComponent: { render: vi.fn().mockResolvedValue(undefined) },
             schemaList: document.createElement('div'),
             scopeDebugger: document.createElement('div'),

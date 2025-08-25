@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { App } from '../../app';
+import { GuiManager } from '../../gui/gui-manager';
 import { Task } from '../models';
 import { TaskType, UUID } from '../types';
 import { ICognitiveSchema, ITruthPolicy, ProcedureHandler } from '../interfaces';
@@ -91,9 +92,11 @@ class SafetyConclusionSchema implements ICognitiveSchema {
 
 describe('SeNARS End-to-End Test', () => {
   let app: App;
+  let guiManager: GuiManager;
 
   beforeEach(async () => {
     app = await App.create(false);
+    guiManager = new GuiManager(app);
     app.schema_registry.register(new SafetyAnalysisSchema());
     app.schema_registry.register(new SafetyConclusionSchema());
     (app as any).procedure_handlers['llm'] = new MockLLMHandler();
@@ -103,8 +106,8 @@ describe('SeNARS End-to-End Test', () => {
     const mockGenerateEmbedding = vi.spyOn(utils, 'generate_embedding');
     mockGenerateEmbedding.mockReturnValue([0.5, 0.5, 0.5]);
 
-    await app.add_new_thought('(eats cat chocolate)', TaskType.BELIEF);
-    await app.add_new_thought('(is_safe_for cat chocolate)', TaskType.GOAL);
+    await guiManager.add_new_thought('(eats cat chocolate)', TaskType.BELIEF);
+    await guiManager.add_new_thought('(is_safe_for cat chocolate)', TaskType.GOAL);
 
     // 4 ticks are required to complete the reasoning chain.
     // 1. Process (eats...)

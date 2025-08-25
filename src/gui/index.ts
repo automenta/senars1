@@ -1,5 +1,5 @@
 import Hammer from 'hammerjs';
-import { App } from './app';
+import { GuiManager } from './gui-manager';
 import { Task } from './core/models';
 import { TaskType } from './core/types';
 import { WorldModel } from './core/world-model';
@@ -23,7 +23,7 @@ export class Gui {
   world_model: WorldModel;
   agenda: Agenda;
   schema_registry: SchemaRegistry;
-  app: App;
+  guiManager: GuiManager;
   renderer: Renderer;
   event_bus: EventBus;
   event_listeners: EventListeners;
@@ -53,14 +53,14 @@ export class Gui {
   };
   lastEnergyLevel: number = 0;
 
-  constructor(app: App, world_model: WorldModel, agenda: Agenda, schema_registry: SchemaRegistry) {
+  constructor(guiManager: GuiManager, world_model: WorldModel, agenda: Agenda, schema_registry: SchemaRegistry) {
     this.state = {
       currentMode: 'thinking',
       pinnedTaskIds: new Set(),
       simulationRunning: false,
       simulationSpeed: 100, // ms per tick
     };
-    this.app = app;
+    this.guiManager = guiManager;
     this.world_model = world_model;
     this.agenda = agenda;
     this.schema_registry = schema_registry;
@@ -74,7 +74,7 @@ export class Gui {
     this.completedThoughtsComponent = new CompletedThoughtsComponent(this);
     this.memoryComponent = new MemoryComponent(this);
     // The '/src/core/worker.ts' path is resolved by Vite's worker loader
-    this.workerPool = new WorkerPool(this.app, '/src/core/worker.ts', 2);
+    this.workerPool = new WorkerPool(this.guiManager, '/src/core/worker.ts', 2);
 
 
     // Cache all DOM element selections
@@ -105,7 +105,7 @@ export class Gui {
 
       const gameLoop = async () => {
           // Main simulation logic
-          await this.app.tick(); // Decay and other global updates
+          await this.guiManager.app.tick(); // Decay and other global updates
           await this.dispatchTasks();
           await this.renderer.render();
 
@@ -133,12 +133,12 @@ export class Gui {
       const freeWorkers = this.workerPool.getFreeWorkerCount();
       if (freeWorkers === 0) return;
 
-      const agendaSize = await this.app.agenda.size();
+      const agendaSize = await this.guiManager.app.agenda.size();
       if (agendaSize === 0) return;
 
       const tasksToDispatch = Math.min(freeWorkers, agendaSize);
       for (let i = 0; i < tasksToDispatch; i++) {
-          const task = await this.app.agenda.pop();
+          const task = await this.guiManager.app.agenda.pop();
           if (task) {
               this.workerPool.dispatchTask(task);
           }
@@ -159,7 +159,7 @@ export class Gui {
     ];
 
     events_to_forward.forEach(event_name => {
-        this.app.on(event_name, (data: any) => {
+        this.guiManager.on(event_name, (data: any) => {
             // The data from app events can be structured like {task: ...} or just be the value itself.
             // We unpack it if necessary.
             const payload = data && typeof data === 'object' && Object.keys(data).length === 1 ? Object.values(data)[0] : data;
@@ -168,9 +168,9 @@ export class Gui {
     });
 
     this.event_bus.on('user_thought_added', (data: { content: string, type: TaskType }) => {
-        if (data.type === 'BELIEF') {
-            this.app.generate_suggestion_for_belief(data.content);
-        }
+        // if (data.type === 'BELIEF') {
+        //     this.guiManager.app.generate_suggestion_for_belief(data.content);
+        // }
     });
   }
 
@@ -179,7 +179,7 @@ export class Gui {
       if (configStr) {
           try {
             const config = JSON.parse(configStr);
-            this.app.update_llm_config(config);
+            this.guiManager.app.update_llm_config(config);
           } catch (e) {
             console.error("Failed to parse LLM config from localStorage", e);
             localStorage.removeItem('llm_config');

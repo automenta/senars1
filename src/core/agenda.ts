@@ -2,7 +2,7 @@ import { Task } from './models';
 import PriorityQueueLib from 'ts-priority-queue';
 import { Mutex } from 'async-mutex';
 import { IAttentionPolicy } from './interfaces';
-import { App } from '../app'; // Circular dependency, but only for types
+import { EventBus } from '../gui/EventBus';
 
 export class Agenda {
   private queue: PriorityQueueLib<Task>;
@@ -10,10 +10,10 @@ export class Agenda {
   private mutex = new Mutex();
   private last_decay_timestamp: number;
   private pinned_tasks: Set<string> = new Set();
-  private app: App;
+  private eventBus: EventBus;
 
-  constructor(app: App) {
-    this.app = app;
+  constructor(eventBus: EventBus) {
+    this.eventBus = eventBus;
     this.queue = new PriorityQueueLib({
       comparator: (a: Task, b: Task) => b.attention.priority - a.attention.priority,
     });
@@ -41,7 +41,7 @@ export class Agenda {
       }
       this.queue.queue(task);
       this.tasks_map.set(task.id, task);
-      this.app.emit('task_added_to_agenda', { task });
+      this.eventBus.emit('task_added_to_agenda', { task });
     } finally {
       release();
     }
@@ -55,7 +55,7 @@ export class Agenda {
       }
       const task = this.queue.dequeue();
       this.tasks_map.delete(task.id);
-      this.app.emit('task_removed_from_agenda', { taskId: task.id });
+      this.eventBus.emit('task_removed_from_agenda', { taskId: task.id });
       return task;
     } finally {
       release();
@@ -113,7 +113,7 @@ export class Agenda {
                     this.queue.queue(t);
                 }
             });
-            this.app.emit('task_updated_in_agenda', { task });
+            this.eventBus.emit('task_updated_in_agenda', { task });
         }
     } finally {
       release();
@@ -161,7 +161,7 @@ export class Agenda {
     }
     const task = this.tasks_map.get(taskId);
     if (task) {
-        this.app.emit('task_updated_in_agenda', { task });
+        this.eventBus.emit('task_updated_in_agenda', { task });
     }
   }
 
