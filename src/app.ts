@@ -113,7 +113,12 @@ export class App {
       atom_id: atom.id,
       type: type,
       attention: this.attention_policy.calculate_initial({} as Task),
-      stamp: { timestamp: Date.now() / 1000, parent_ids: [], schema_id: uuidv4() },
+      stamp: {
+        timestamp: Date.now() / 1000,
+        parent_ids: [],
+        schema_id: uuidv4(),
+        source: 'user', // Tag task as originating from the user
+      },
     };
 
     if (type === TaskType.BELIEF) {

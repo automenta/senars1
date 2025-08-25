@@ -22,7 +22,8 @@ export interface DerivationStamp {
   parent_ids: UUID[];
   schema_id: UUID;
   scope_bindings?: Record<string, string>;
-    path?: string[]; // Human-readable derivation path
+  path?: string[]; // Human-readable derivation path
+  source?: string; // Where the task originated from, e.g., 'user'
 }
 
 export interface Task {
