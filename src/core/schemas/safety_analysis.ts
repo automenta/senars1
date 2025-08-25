@@ -11,14 +11,14 @@ export class SafetyAnalysisSchema implements ICognitiveSchema {
     return ['(eats $animal $substance)', '(is_safe_for $animal $substance)'];
   }
 
-  private _derive(
+  private async _derive(
     task_a: Task,
     task_b: Task,
     truth_policy: ITruthPolicy,
     world_model: WorldModel,
     bindings: Record<string, string>,
     scope_bindings?: Record<string, string>
-  ): Task[] {
+  ): Promise<Task[]> {
     const animal = bindings['$animal'];
     const substance = bindings['$substance'];
 
@@ -34,7 +34,7 @@ export class SafetyAnalysisSchema implements ICognitiveSchema {
       content: scope_content,
       embedding: [],
     };
-    world_model.add_atom(scope_atom);
+    await world_model.add_atom(scope_atom);
 
     const scope_task: Task = {
       id: uuidv4(),
@@ -52,31 +52,37 @@ export class SafetyAnalysisSchema implements ICognitiveSchema {
     return [scope_task];
   }
 
-  apply(
+  async apply(
     task_a: Task,
-    task_b: Task,
+    task_b: Task | undefined,
     truth_policy: ITruthPolicy,
     world_model: WorldModel,
     bindings: Record<string, string>
-  ): Task[] {
+  ): Promise<Task[]> {
+    if (!task_b) {
+      return [];
+    }
     try {
-      return this._derive(task_a, task_b, truth_policy, world_model, bindings);
+      return await this._derive(task_a, task_b, truth_policy, world_model, bindings);
     } catch (e) {
       console.error("Error in SafetyAnalysisSchema.apply:", e);
       return [];
     }
   }
 
-  apply_with_bindings(
+  async apply_with_bindings(
     task_a: Task,
-    task_b: Task,
+    task_b: Task | undefined,
     truth_policy: ITruthPolicy,
     scope_bindings: Record<string, string>,
     world_model: WorldModel,
     bindings: Record<string, string>
-  ): Task[] {
+  ): Promise<Task[]> {
+    if (!task_b) {
+      return [];
+    }
     try {
-      return this._derive(task_a, task_b, truth_policy, world_model, bindings, scope_bindings);
+      return await this._derive(task_a, task_b, truth_policy, world_model, bindings, scope_bindings);
     } catch (e) {
       console.error("Error in SafetyAnalysisSchema.apply_with_bindings:", e);
       return [];

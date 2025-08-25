@@ -68,11 +68,14 @@ export class AbductionSchema implements ICognitiveSchema {
 
   apply(
     task_a: Task,
-    task_b: Task,
+    task_b: Task | undefined,
     truth_policy: ITruthPolicy,
     world_model: WorldModel,
     bindings: Record<string, string>
   ): Task[] {
+    if (!task_b) {
+      return [];
+    }
     try {
       return this._derive(task_a, task_b, truth_policy, world_model, bindings);
     } catch (e) {
@@ -83,12 +86,15 @@ export class AbductionSchema implements ICognitiveSchema {
 
   apply_with_bindings(
     task_a: Task,
-    task_b: Task,
+    task_b: Task | undefined,
     truth_policy: ITruthPolicy,
     scope_bindings: Record<string, string>,
     world_model: WorldModel,
     bindings: Record<string, string>
   ): Task[] {
+    if (!task_b) {
+      return [];
+    }
     try {
       return this._derive(task_a, task_b, truth_policy, world_model, bindings, scope_bindings);
     } catch (e) {

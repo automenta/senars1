@@ -146,7 +146,7 @@ export class InMemoryPatternMatcher implements PatternMatcher {
         return schema_ids.includes(schema_id);
     }
 
-    match(content_a: string, content_b: string): MatchResult[] {
+    match_dual(content_a: string, content_b: string): MatchResult[] {
         const results: MatchResult[] = [];
         let contentA_SExpr, contentB_SExpr;
 
@@ -154,18 +154,15 @@ export class InMemoryPatternMatcher implements PatternMatcher {
             contentA_SExpr = parseSExpression(content_a);
             contentB_SExpr = parseSExpression(content_b);
         } catch (e) {
-            // If either content cannot be parsed, they cannot match any S-Expression patterns.
             return [];
         }
 
-        // Dual premise matching
         for (const [patternKey, schema_ids] of this.dual_premise_patterns.entries()) {
             try {
                 const pattern = JSON.parse(patternKey) as [string, string];
                 const patternA = parseSExpression(pattern[0]);
                 const patternB = parseSExpression(pattern[1]);
 
-                // Try matching (A, B) with (content_a, content_b)
                 const bindings1: Record<string, string> = {};
                 if (matchSExpressionPattern(patternA, contentA_SExpr, bindings1) && matchSExpressionPattern(patternB, contentB_SExpr, bindings1)) {
                     for (const schema_id of schema_ids) {
@@ -173,7 +170,6 @@ export class InMemoryPatternMatcher implements PatternMatcher {
                     }
                 }
 
-                // Try matching (A, B) with (content_b, content_a)
                 const bindings2: Record<string, string> = {};
                 if (matchSExpressionPattern(patternA, contentB_SExpr, bindings2) && matchSExpressionPattern(patternB, contentA_SExpr, bindings2)) {
                     for (const schema_id of schema_ids) {
@@ -186,23 +182,28 @@ export class InMemoryPatternMatcher implements PatternMatcher {
             }
         }
 
-        // Single premise matching (optional, if schemas can be triggered by one task)
+        return results;
+    }
+
+    match_single(content: string): MatchResult[] {
+        const results: MatchResult[] = [];
+        let contentSExpr;
+
+        try {
+            contentSExpr = parseSExpression(content);
+        } catch (e) {
+            return [];
+        }
+
         for (const [patternKey, schema_ids] of this.single_premise_patterns.entries()) {
             try {
                 const pattern = JSON.parse(patternKey) as string;
                 const patternSExpr = parseSExpression(pattern);
 
-                const bindingsA: Record<string, string> = {};
-                if (matchSExpressionPattern(patternSExpr, contentA_SExpr, bindingsA)) {
+                const bindings: Record<string, string> = {};
+                if (matchSExpressionPattern(patternSExpr, contentSExpr, bindings)) {
                     for (const schema_id of schema_ids) {
-                        results.push({ schema_id, bindings: { ...bindingsA } });
-                    }
-                }
-
-                const bindingsB: Record<string, string> = {};
-                if (matchSExpressionPattern(patternSExpr, contentB_SExpr, bindingsB)) {
-                    for (const schema_id of schema_ids) {
-                        results.push({ schema_id, bindings: { ...bindingsB } });
+                        results.push({ schema_id, bindings: { ...bindings } });
                     }
                 }
             } catch (e) {
@@ -324,13 +325,16 @@ export class DefaultResonanceStrategy implements IResonanceStrategy {
 }
 
 import { LLMConfig } from './config';
+import { App } from '../app';
 
 export class LLMHandler implements ProcedureHandler {
   private config: LLMConfig;
   private llm?: ChatOpenAI;
+  private app: App;
 
-  constructor(config: LLMConfig) {
+  constructor(config: LLMConfig, app: App) {
     this.config = config;
+    this.app = app;
     this.update_config(config);
   }
 
@@ -438,4 +442,50 @@ export class LLMHandler implements ProcedureHandler {
           }
       }];
   }
+}
+
+export class QuestionGeneratorHandler implements ProcedureHandler {
+    private app: App;
+    private llm: LLMHandler;
+
+    constructor(app: App, llm: LLMHandler) {
+        this.app = app;
+        this.llm = llm;
+    }
+
+    name(): string {
+        return "question_generator";
+    }
+
+    can_handle(content: string): boolean {
+        return content.includes('(execute "question_generator"');
+    }
+
+    async execute(
+        content: string,
+        bindings: Record<string, string>,
+        world_model: WorldModel
+    ): Promise<Task[]> {
+        const for_thought = extract_param(content, "for_thought");
+        if (!for_thought) {
+            console.warn("QuestionGeneratorHandler: for_thought parameter not found.");
+            return [];
+        }
+
+        const query = `Given the statement "${for_thought}", what is a good follow-up question to expand on this thought?`;
+
+        // We'll use the LLM handler to ask the question.
+        // The result of the LLM handler is a BELIEF task. We need to get the content of that belief.
+        const llm_tasks = await this.llm.execute(`(execute "llm" query:"${query}")`, bindings, world_model);
+
+        if (llm_tasks.length > 0) {
+            const result_atom = world_model.get_atom(llm_tasks[0].atom_id);
+            const result_text = extract_param(result_atom.content, `"${query}"`);
+            if (result_text) {
+                this.app.emit('suggestion_generated', { question: result_text });
+            }
+        }
+
+        return [];
+    }
 }

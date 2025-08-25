@@ -49,7 +49,8 @@ describe('CognitiveEngine', () => {
     vi.spyOn(agenda, 'isEmpty').mockResolvedValue(false);
     vi.spyOn(agenda, 'pop').mockResolvedValue(parent_a);
     vi.spyOn(world_model, 'find_resonant').mockReturnValue([parent_b]);
-    vi.spyOn(world_model, 'find_schemas').mockReturnValue([{ schema_id: deductionSchema.id, bindings: {} }]);
+    vi.spyOn(world_model, 'find_single_premise_schemas').mockReturnValue([]);
+    vi.spyOn(world_model, 'find_dual_premise_schemas').mockReturnValue([{ schema_id: deductionSchema.id, bindings: {} }]);
     vi.spyOn(schema_registry, 'get').mockReturnValue(deductionSchema);
     vi.spyOn(deductionSchema, 'apply').mockReturnValue([derived_task]);
     vi.spyOn(world_model, 'get_atom').mockImplementation((atom_id) => ({ id: atom_id, content: `content_${atom_id}`, embedding: [] }));

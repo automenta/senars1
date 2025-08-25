@@ -54,7 +54,8 @@ export class CognitiveEngine {
       if (is_procedure_task(task_a, this.world_model)) {
         await this.handle_procedure_task(task_a, scope_bindings);
       } else {
-        await this.handle_regular_task(task_a, context, scope_bindings);
+        await this.handle_single_premise_task(task_a, scope_bindings);
+        await this.handle_dual_premise_task(task_a, context, scope_bindings);
       }
     } catch (error) {
       console.error("Cognitive Engine Tick Error:", error);
@@ -85,14 +86,36 @@ export class CognitiveEngine {
     }
   }
 
-  private async handle_regular_task(task_a: Task, context: Task[], scope_bindings?: Record<string, string>) {
-    for (const task_b of context) {
-      await this.apply_schemas(task_a, task_b, scope_bindings);
+  private async handle_single_premise_task(task_a: Task, scope_bindings?: Record<string, string>) {
+    const match_results = this.world_model.find_single_premise_schemas(task_a);
+
+    for (const match_result of match_results) {
+      const schema = this.schema_registry.get(match_result.schema_id);
+      if (!schema) continue;
+
+      let derived: Task[] = [];
+      if (scope_bindings) {
+        derived = await schema.apply_with_bindings(
+          task_a, undefined, this.truth_policy, scope_bindings, this.world_model, match_result.bindings
+        );
+      } else {
+        derived = await schema.apply(task_a, undefined, this.truth_policy, this.world_model, match_result.bindings);
+      }
+
+      for (const new_task of derived) {
+        this.enqueue_derived_task(new_task, task_a, undefined, schema.id, scope_bindings);
+      }
     }
   }
 
-  private async apply_schemas(task_a: Task, task_b: Task, scope_bindings?: Record<string, string>) {
-    const match_results = this.world_model.find_schemas(task_a, task_b);
+  private async handle_dual_premise_task(task_a: Task, context: Task[], scope_bindings?: Record<string, string>) {
+    for (const task_b of context) {
+      await this.apply_dual_premise_schemas(task_a, task_b, scope_bindings);
+    }
+  }
+
+  private async apply_dual_premise_schemas(task_a: Task, task_b: Task, scope_bindings?: Record<string, string>) {
+    const match_results = this.world_model.find_dual_premise_schemas(task_a, task_b);
 
     for (const match_result of match_results) {
       const schema = this.schema_registry.get(match_result.schema_id);
@@ -113,39 +136,54 @@ export class CognitiveEngine {
     }
   }
 
-  private async enqueue_derived_task(new_task: Task, parent_a: Task, parent_b: Task, schema_id: string, scope_bindings?: Record<string, string>) {
-    if (new_task.type === TaskType.BELIEF) {
+  private async enqueue_derived_task(new_task: Task, parent_a: Task, parent_b: Task | undefined, schema_id: string, scope_bindings?: Record<string, string>) {
+    if (new_task.type === TaskType.BELIEF && parent_b) {
       new_task.truth = this.truth_policy.derivation(
         parent_a, parent_b, schema_id
       );
     }
-    new_task.attention = this.attention_policy.calculate_derived(
-      parent_a, parent_b, schema_id
-    );
+
+    if (parent_b) {
+        new_task.attention = this.attention_policy.calculate_derived(
+            parent_a, parent_b, schema_id
+        );
+    } else {
+        // If there's no second parent, we can't use calculate_derived directly.
+        // Let's create a new attention value based on the single parent.
+        new_task.attention = {
+            priority: parent_a.attention.priority * 0.9, // Slightly less than parent
+            durability: parent_a.attention.durability * 0.9
+        };
+    }
 
     const schema_name = this.schema_registry.get(schema_id)?.constructor.name || 'UnknownSchema';
     const parent_a_content = this.world_model.get_atom(parent_a.atom_id).content;
-    const parent_b_content = this.world_model.get_atom(parent_b.atom_id).content;
 
     let base_path: string[];
     const path_a = parent_a.stamp.path;
-    const path_b = parent_b.stamp.path;
-
-    if (path_a && path_b) {
-      base_path = Array.from(new Set([...path_a, ...path_b]));
-    } else if (path_a) {
-      base_path = path_a;
-    } else if (path_b) {
-      base_path = path_b;
+    if (path_a) {
+        base_path = path_a;
     } else {
-      base_path = [parent_a_content, parent_b_content];
+        base_path = [parent_a_content];
+    }
+
+    if (parent_b) {
+        const parent_b_content = this.world_model.get_atom(parent_b.atom_id).content;
+        const path_b = parent_b.stamp.path;
+        if (path_a && path_b) {
+            base_path = Array.from(new Set([...path_a, ...path_b]));
+        } else if (path_b) {
+            base_path = path_b;
+        } else {
+            base_path = Array.from(new Set([parent_a_content, parent_b_content]));
+        }
     }
 
     const new_path = base_path.concat([`[Schema: ${schema_name}]`]);
 
     new_task.stamp = {
       timestamp: Date.now() / 1000,
-      parent_ids: [parent_a.id, parent_b.id],
+      parent_ids: parent_b ? [parent_a.id, parent_b.id] : [parent_a.id],
       schema_id: schema_id,
       scope_bindings: scope_bindings,
       path: new_path,

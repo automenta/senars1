@@ -1,5 +1,5 @@
 import './style.css';
-import { Gui } from './gui';
+import { Gui } from './gui/index';
 import { App } from './app';
 
 document.addEventListener('DOMContentLoaded', async () => {

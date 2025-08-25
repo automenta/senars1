@@ -76,10 +76,15 @@ export class WorldModel {
     return this.resonance.find_context(focus, this, k);
   }
 
-  find_schemas(task_a: Task, task_b: Task): MatchResult[] {
+  find_dual_premise_schemas(task_a: Task, task_b: Task): MatchResult[] {
     const atom_a = this.get_atom(task_a.atom_id);
     const atom_b = this.get_atom(task_b.atom_id);
-    return this.schema_index.match(atom_a.content, atom_b.content);
+    return this.schema_index.match_dual(atom_a.content, atom_b.content);
+  }
+
+  find_single_premise_schemas(task: Task): MatchResult[] {
+    const atom = this.get_atom(task.atom_id);
+    return this.schema_index.match_single(atom.content);
   }
 
   get_atom(atom_id: UUID): SemanticAtom {

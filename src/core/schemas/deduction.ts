@@ -13,14 +13,14 @@ export class DeductionSchema implements ICognitiveSchema {
     return ["(implies $P $Q)", "($P)"];
   }
 
-  private _derive(
+  private async _derive(
     implication_task: Task,
     premise_task: Task,
     truth_policy: ITruthPolicy,
     world_model: WorldModel,
     bindings: Record<string, string>,
     scope_bindings?: Record<string, string>
-  ): Task[] {
+  ): Promise<Task[]> {
     let derivedContent = bindings['$Q'];
     if (!derivedContent) return [];
 
@@ -44,7 +44,7 @@ export class DeductionSchema implements ICognitiveSchema {
       content: derivedContent,
       embedding: [], // Embeddings should be generated for real use cases
     };
-    world_model.add_atom(derivedAtom);
+    await world_model.add_atom(derivedAtom);
 
     const derivedTask: Task = {
       id: uuidv4(),
@@ -64,33 +64,39 @@ export class DeductionSchema implements ICognitiveSchema {
     return [derivedTask];
   }
 
-  apply(
+  async apply(
     task_a: Task,
-    task_b: Task,
+    task_b: Task | undefined,
     truth_policy: ITruthPolicy,
     world_model: WorldModel,
     bindings: Record<string, string>
-  ): Task[] {
+  ): Promise<Task[]> {
+    if (!task_b) {
+      return [];
+    }
     try {
       // The order matters for deduction. We need to know which is the implication and which is the premise.
       // We assume the pattern matcher provides bindings based on a consistent order.
-      return this._derive(task_a, task_b, truth_policy, world_model, bindings);
+      return await this._derive(task_a, task_b, truth_policy, world_model, bindings);
     } catch (e) {
       console.error("Error in DeductionSchema.apply:", e);
       return [];
     }
   }
 
-  apply_with_bindings(
+  async apply_with_bindings(
     task_a: Task,
-    task_b: Task,
+    task_b: Task | undefined,
     truth_policy: ITruthPolicy,
     scope_bindings: Record<string, string>,
     world_model: WorldModel,
     bindings: Record<string, string>
-  ): Task[] {
+  ): Promise<Task[]> {
+    if (!task_b) {
+      return [];
+    }
     try {
-      return this._derive(task_a, task_b, truth_policy, world_model, bindings, scope_bindings);
+      return await this._derive(task_a, task_b, truth_policy, world_model, bindings, scope_bindings);
     } catch (e) {
       console.error("Error in DeductionSchema.apply_with_bindings:", e);
       return [];

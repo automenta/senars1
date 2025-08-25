@@ -29,7 +29,7 @@ export interface ICognitiveSchema {
   get_trigger_pattern(): TriggerPattern;
   apply(
     task_a: Task,
-    task_b: Task,
+    task_b: Task | undefined,
     truth_policy: ITruthPolicy,
     world_model: WorldModel,
     bindings: Record<string, string>
@@ -37,7 +37,7 @@ export interface ICognitiveSchema {
 
   apply_with_bindings(
     task_a: Task,
-    task_b: Task,
+    task_b: Task | undefined,
     truth_policy: ITruthPolicy,
     scope_bindings: Record<string, string>,
     world_model: WorldModel,
@@ -69,6 +69,7 @@ export interface MatchResult {
 export interface PatternMatcher {
   add(pattern: TriggerPattern, schema_id: UUID): void;
   remove(pattern: TriggerPattern, schema_id: UUID): void;
-  match(content_a: string, content_b: string): MatchResult[];
+  match_dual(content_a: string, content_b: string): MatchResult[];
+  match_single(content: string): MatchResult[];
   has(pattern: TriggerPattern, schema_id: UUID): boolean;
 }

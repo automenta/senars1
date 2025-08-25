@@ -45,12 +45,15 @@ export class InductionSchema implements ICognitiveSchema {
     };
   }
 
-  apply(
+  async apply(
     task_a: Task,
-    task_b: Task,
+    task_b: Task | undefined,
     truth_policy: ITruthPolicy,
     world_model: WorldModel
-  ): Task[] {
+  ): Promise<Task[]> {
+    if (!task_b) {
+      return [];
+    }
     const atom_a = world_model.get_atom(task_a.atom_id);
     const atom_b = world_model.get_atom(task_b.atom_id);
 
@@ -71,7 +74,7 @@ export class InductionSchema implements ICognitiveSchema {
         content: implication_content,
         embedding: [],
       };
-      world_model.add_atom(derivedAtom);
+      await world_model.add_atom(derivedAtom);
 
       const derivedTask: Task = {
         id: generate_uuid(),
@@ -91,15 +94,18 @@ export class InductionSchema implements ICognitiveSchema {
     return [];
   }
 
-  apply_with_bindings(
+  async apply_with_bindings(
     task_a: Task,
-    task_b: Task,
+    task_b: Task | undefined,
     truth_policy: ITruthPolicy,
     scope_bindings: Record<string, string>,
     world_model: WorldModel
-  ): Task[] {
+  ): Promise<Task[]> {
+    if (!task_b) {
+      return [];
+    }
     // Induction doesn't typically work with pre-defined scope bindings in this context.
     // We are generating a new general rule, not applying a scoped one.
-    return this.apply(task_a, task_b, truth_policy, world_model);
+    return await this.apply(task_a, task_b, truth_policy, world_model);
   }
 }

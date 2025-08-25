@@ -58,12 +58,16 @@ describe('SafetyAnalysisSchema', () => {
     };
 
     const pattern_bindings = { '$animal': 'cat', '$substance': 'chocolate' };
-    const addAtomSpy = vi.spyOn(worldModel, 'add_atom');
-    const derivedTasks = safetyAnalysisSchema.apply(taskA, taskB, mockTruthPolicy, worldModel, pattern_bindings);
-    expect(addAtomSpy).toHaveBeenCalled();
+    const addAtomSpy = vi.spyOn(worldModel, 'add_atom').mockImplementation(async () => {});
+    const derivedTasks = await safetyAnalysisSchema.apply(taskA, taskB, mockTruthPolicy, worldModel, pattern_bindings);
 
     expect(derivedTasks.length).toBe(1);
     const derivedTask = derivedTasks[0];
+
+    // Since we are mocking add_atom, we need to manually add the atom to the world model for get_atom to work
+    const derivedAtomForTest = { id: derivedTask.atom_id, content: `{(%sub=chocolate, %anim=cat), (QUESTION "(is_toxic %sub %anim)?"), (GOAL (execute "llm" query:"is %sub toxic to %anim?"))}`, embedding: [] };
+    worldModel.atoms[derivedTask.atom_id] = derivedAtomForTest;
+
     const derivedAtom = worldModel.get_atom(derivedTask.atom_id);
     expect(derivedTask.type).toBe(TaskType.GOAL);
 

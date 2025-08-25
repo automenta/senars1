@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { generate_embedding } from './core/utils';
 import { WorldModel } from './core/world-model';
-import { DefaultAttentionPolicy, DefaultTruthPolicy, DefaultResonanceStrategy, LLMHandler, InMemoryPatternMatcher } from './core/implementations';
+import { DefaultAttentionPolicy, DefaultTruthPolicy, DefaultResonanceStrategy, LLMHandler, InMemoryPatternMatcher, QuestionGeneratorHandler } from './core/implementations';
 import { Task, SemanticAtom } from './core/models';
 import { TaskType } from './core/types';
 import { ProcedureHandler } from './core/interfaces';
@@ -12,6 +12,7 @@ import { AbductionSchema } from './core/schemas/abduction';
 import { InductionSchema } from './core/schemas/induction';
 import { SafetyAnalysisSchema } from './core/schemas/safety_analysis';
 import { SelfSafetySchema } from './core/schemas/self_safety';
+import { ThoughtExpansionSchema } from './core/schemas/thought_expansion';
 import { seed_data } from './core/seed';
 import { CognitiveEngine } from './core/engine'; // Import the new engine
 import { loadConfig, Config, LLMConfig } from './core/config';
@@ -26,6 +27,7 @@ export class App {
   private procedure_handlers: Record<string, ProcedureHandler>;
   private engine: CognitiveEngine; // Add the engine instance
   private config: Config;
+  private events: Record<string, Function[]> = {};
 
   // GUI can access these via getters
   public get last_scope_bindings(): Record<string, string> | undefined {
@@ -48,8 +50,11 @@ export class App {
     this.schema_registry = new SchemaRegistry(pattern_matcher);
     this.world_model = new WorldModel(this.resonance_strategy, this.truth_policy, this.schema_registry, pattern_matcher);
 
-    const llmHandler = new LLMHandler(this.config.llm);
+    const llmHandler = new LLMHandler(this.config.llm, this);
     this.procedure_handlers[llmHandler.name()] = llmHandler;
+
+    const questionGeneratorHandler = new QuestionGeneratorHandler(this, llmHandler);
+    this.procedure_handlers[questionGeneratorHandler.name()] = questionGeneratorHandler;
 
     this.engine = new CognitiveEngine(
       this.world_model,
@@ -74,6 +79,9 @@ export class App {
 
     const selfSafetySchema = new SelfSafetySchema();
     this.schema_registry.register(selfSafetySchema);
+
+    const thoughtExpansionSchema = new ThoughtExpansionSchema();
+    this.schema_registry.register(thoughtExpansionSchema);
 
     if (seedData) {
       seed_data(this.world_model, this.agenda, this.attention_policy);
@@ -203,6 +211,20 @@ export class App {
             task.truth.confidence = Math.max(0.0, task.truth.confidence - 0.2);
         }
         task.attention.durability = Math.max(0.0, task.attention.durability - 0.2);
+    }
+  }
+
+  public on(eventName: string, callback: Function) {
+    if (!this.events[eventName]) {
+      this.events[eventName] = [];
+    }
+    this.events[eventName].push(callback);
+  }
+
+  public emit(eventName: string, data: any) {
+    const eventCallbacks = this.events[eventName];
+    if (eventCallbacks) {
+      eventCallbacks.forEach(callback => callback(data));
     }
   }
 }
