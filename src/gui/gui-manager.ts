@@ -17,16 +17,31 @@ export class GuiManager {
 
   // All methods below are for GUI interaction and state management
   public async add_new_thought(content: string, type: TaskType = TaskType.GOAL) {
-    const atom: SemanticAtom = {
-      id: uuidv4(),
-      content: content,
-      embedding: generate_embedding(content),
-    };
-    this.app.world_model.add_atom(atom);
+    // First, check if a task with this exact content already exists in the agenda
+    const existing_task = await this.app.agenda.find_task_by_content(content, this.app.world_model);
+    if (existing_task) {
+        console.log(`Task with content "${content}" already exists in the agenda. Aborting.`);
+        // Optional: give the existing task a small boost
+        this.boost_task(existing_task.id);
+        return;
+    }
+
+    // Check if an atom with this content already exists
+    let atom = this.app.world_model.find_atom_by_content(content);
+
+    if (!atom) {
+      // If not, create a new one
+      atom = {
+        id: uuidv4(),
+        content: content,
+        embedding: generate_embedding(content),
+      };
+      this.app.world_model.add_atom(atom);
+    }
 
     const newTask: Task = {
       id: uuidv4(),
-      atom_id: atom.id,
+      atom_id: atom.id, // Use the ID of the existing or new atom
       type: type,
       attention: this.app.get_attention_policy().calculate_initial({} as Task),
       stamp: {

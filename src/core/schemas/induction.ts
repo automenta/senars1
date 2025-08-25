@@ -4,6 +4,7 @@ import { parseSExpression, sExpressionToString, SExpression } from '../s-express
 import { WorldModel } from '../world-model';
 import { generateUUID, createDerivedTask } from './utils';
 import { UUID } from '../types';
+import { generate_embedding } from '../utils';
 
 export class InductionSchema implements ICognitiveSchema {
   public readonly id: UUID = generateUUID("induction_schema");
@@ -92,7 +93,7 @@ export class InductionSchema implements ICognitiveSchema {
       const derivedAtom: SemanticAtom = {
         id: generateUUID('atom'),
         content: implication_content,
-        embedding: [],
+        embedding: generate_embedding(implication_content),
       };
       await world_model.add_atom(derivedAtom);
 

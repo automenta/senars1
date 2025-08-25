@@ -3,6 +3,7 @@ import { Task, SemanticAtom } from '../models';
 import { UUID, TaskType } from '../types';
 import { WorldModel } from '../world-model';
 import { v4 as uuidv4 } from 'uuid';
+import { generate_embedding } from '../utils';
 
 export class SafetyAnalysisSchema implements ICognitiveSchema {
   public readonly id: UUID = uuidv4();
@@ -32,7 +33,7 @@ export class SafetyAnalysisSchema implements ICognitiveSchema {
     const scope_atom: SemanticAtom = {
       id: uuidv4(),
       content: scope_content,
-      embedding: [],
+      embedding: generate_embedding(scope_content),
     };
     await world_model.add_atom(scope_atom);
 

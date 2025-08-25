@@ -113,6 +113,9 @@ export class EventListeners {
                     this.gui.notificationComponent.show(`Belief "${belief_content}" forgotten.`, 'info');
                 }
                 break;
+            case 'debug-state':
+                this.gui.debug_state();
+                break;
         }
     }
 

@@ -3,6 +3,7 @@ import { Task, SemanticAtom } from '../models';
 import { UUID, TaskType } from '../types';
 import { WorldModel } from '../world-model';
 import { v4 as uuidv4 } from 'uuid';
+import { generate_embedding } from '../utils';
 
 export class ThoughtExpansionSchema implements ICognitiveSchema {
   public readonly id: UUID = uuidv4();
@@ -32,7 +33,7 @@ export class ThoughtExpansionSchema implements ICognitiveSchema {
     const derivedAtom: SemanticAtom = {
       id: uuidv4(),
       content: derivedContent,
-      embedding: [],
+      embedding: generate_embedding(derivedContent),
     };
     await world_model.add_atom(derivedAtom);
 

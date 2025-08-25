@@ -117,6 +117,7 @@ export class InMemoryPatternMatcher implements PatternMatcher {
 
     add(pattern: TriggerPattern, schema_id: UUID): void {
         const key = JSON.stringify(pattern);
+        console.log(`[InMemoryPatternMatcher.add] Registering pattern for schema ${schema_id}: ${key}`);
         if (typeof pattern === 'string') {
             if (!this.single_premise_patterns.has(key)) {
                 this.single_premise_patterns.set(key, []);
@@ -283,53 +284,10 @@ export class DefaultResonanceStrategy implements IResonanceStrategy {
     k: number,
     scope_bindings?: Record<string, string>
   ): Task[] {
-    // For now, a simple approach: find tasks with similar semantic embeddings
-    // and also tasks that share symbolic content (S-expressions).
-    const focusAtom = world_model.get_atom(focus.atom_id);
-    const relevantAtomIds = world_model.semantic_index.find_nearest(focusAtom.embedding, k * 2); // Get more to filter later
-
-    const contextTasks: Task[] = [];
-    const addedTaskIds = new Set<UUID>();
-
-    for (const atomId of relevantAtomIds) {
-      // Find tasks associated with this atom
-      for (const task of Object.values(world_model.tasks)) {
-        if (task.atom_id === atomId && task.id !== focus.id && !addedTaskIds.has(task.id)) {
-          contextTasks.push(task);
-          addedTaskIds.add(task.id);
-          if (contextTasks.length >= k) return contextTasks;
-        }
-      }
-    }
-
-    // Also consider tasks that have similar symbolic content (e.g., same head of S-expression)
-    try {
-        const focusSExpr = parseSExpression(focusAtom.content);
-        for (const content in world_model.symbolic_index) {
-            if (content === focusAtom.content) continue;
-            try {
-                const contentSExpr = parseSExpression(content);
-                if (focusSExpr.head === contentSExpr.head) {
-                    for (const atomId of world_model.symbolic_index[content]) {
-                        for (const task of Object.values(world_model.tasks)) {
-                            if (task.atom_id === atomId && task.id !== focus.id && !addedTaskIds.has(task.id)) {
-                                contextTasks.push(task);
-                                addedTaskIds.add(task.id);
-                                if (contextTasks.length >= k) return contextTasks;
-                            }
-                        }
-                    }
-                }
-            } catch (e) {
-                // Ignore content that is not a valid S-Expression (like scope expressions)
-                continue;
-            }
-        }
-    } catch (e) {
-        // Ignore if the focus task itself is not a valid S-Expression
-    }
-
-    return contextTasks.slice(0, k);
+    // For debugging and to ensure schemas can fire, we are temporarily returning all other tasks.
+    // This is inefficient but necessary to validate the rest of the reasoning pipeline.
+    // A more sophisticated resonance strategy would be needed for a production system.
+    return Object.values(world_model.tasks).filter(task => task.id !== focus.id);
   }
 }
 

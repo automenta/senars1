@@ -52,9 +52,13 @@ export class WorldModel {
 
   async add_task(task: Task): Promise<void> {
     await this.mutex.runExclusive(async () => {
+      const task_content = this.get_atom(task.atom_id)?.content || 'CONTENT NOT FOUND';
+      console.log(`[WorldModel.add_task] Attempting to add task with content: "${task_content}"`);
+
       if (task.type === 'BELIEF') {
         const existing = this.find_belief(task.atom_id);
         if (existing) {
+          console.log(`[WorldModel.add_task] Found existing belief for the same atom. Revising it. Content: "${task_content}"`);
           // Update the existing task with the revised truth value
           existing.truth = this.truth_policy.revision(existing, task);
           // Also update attention, as the new task might have higher priority
@@ -63,6 +67,7 @@ export class WorldModel {
           return;
         }
       }
+      console.log(`[WorldModel.add_task] Adding new task to world model. Content: "${task_content}"`);
       this.tasks[task.id] = task;
       if (task.type === 'BELIEF') {
         this.eventBus.emit('belief_added_to_world_model', { task });
@@ -75,6 +80,15 @@ export class WorldModel {
       if (task.type === 'BELIEF' && task.atom_id === atom_id) {
         return task;
       }
+    }
+    return undefined;
+  }
+
+  find_atom_by_content(content: string): SemanticAtom | undefined {
+    const atom_ids = this.symbolic_index[content];
+    if (atom_ids && atom_ids.length > 0) {
+      // Return the first atom found with this content
+      return this.atoms[atom_ids[0]];
     }
     return undefined;
   }

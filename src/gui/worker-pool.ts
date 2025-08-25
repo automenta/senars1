@@ -87,7 +87,7 @@ export class WorkerPool {
      * that any new SemanticAtoms created by the worker are added to the main
      * WorldModel *before* the tasks that reference them are added to the agenda.
      */
-    private async handleTaskResult(payload: { derivedTasks: Task[], newAtoms: SemanticAtom[], parentTaskId: string }) {
+    private async handleTaskResult(payload: { derivedTasks: Task[], newAtoms: SemanticAtom[], parentTaskId: string, processedTask?: Task }) {
         this.completedTasksCounter++;
 
         // 1. Add all new atoms to the main world model.
@@ -95,7 +95,12 @@ export class WorkerPool {
             this.guiManager.app.world_model.add_atom(atom);
         }
 
-        // 2. Now it is safe to add the derived tasks to the agenda.
+        // 2. Add the processed task to the world model if it's a belief
+        if (payload.processedTask && payload.processedTask.type === 'BELIEF') {
+            await this.guiManager.app.world_model.add_task(payload.processedTask);
+        }
+
+        // 3. Now it is safe to add the derived tasks to the agenda.
         for (const task of payload.derivedTasks) {
             await this.guiManager.app.agenda.push(task);
         }

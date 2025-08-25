@@ -3,6 +3,7 @@ import PriorityQueueLib from 'ts-priority-queue';
 import { Mutex } from 'async-mutex';
 import { IAttentionPolicy } from './interfaces';
 import { EventBus } from '../gui/EventBus';
+import { WorldModel } from './world-model';
 
 export class Agenda {
   private queue: PriorityQueueLib<Task>;
@@ -44,6 +45,21 @@ export class Agenda {
       this.eventBus.emit('task_added_to_agenda', { task });
     } finally {
       release();
+    }
+  }
+
+  async find_task_by_content(content: string, world_model: WorldModel): Promise<Task | undefined> {
+    const release = await this.mutex.acquire();
+    try {
+        for (const task of this.tasks_map.values()) {
+            const atom = world_model.get_atom(task.atom_id);
+            if (atom && atom.content === content) {
+                return task;
+            }
+        }
+        return undefined;
+    } finally {
+        release();
     }
   }
 

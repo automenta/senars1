@@ -4,6 +4,7 @@ import { substituteInContent } from '../scope';
 import { WorldModel } from '../world-model';
 import { BaseSchema } from './base_schema';
 import { generateUUID, createDerivedTask } from './utils';
+import { generate_embedding } from '../utils';
 
 export class DeductionSchema extends BaseSchema {
   constructor() {
@@ -42,7 +43,7 @@ export class DeductionSchema extends BaseSchema {
     const derivedAtom: SemanticAtom = {
       id: generateUUID('atom'),
       content: derivedContent,
-      embedding: [], // Embeddings should be generated for real use cases
+      embedding: generate_embedding(derivedContent),
     };
     await world_model.add_atom(derivedAtom);
 
