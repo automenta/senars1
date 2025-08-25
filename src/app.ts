@@ -46,13 +46,13 @@ export class App {
     this.attention_policy = new DefaultAttentionPolicy();
     this.truth_policy = new DefaultTruthPolicy();
     this.resonance_strategy = new DefaultResonanceStrategy();
-    this.agenda = new Agenda();
+    this.agenda = new Agenda(this);
     this.procedure_handlers = {};
 
     // Create the pattern matcher first, as it's a shared dependency
     const pattern_matcher = new InMemoryPatternMatcher();
     this.schema_registry = new SchemaRegistry(pattern_matcher);
-    this.world_model = new WorldModel(this.resonance_strategy, this.truth_policy, this.schema_registry, pattern_matcher);
+    this.world_model = new WorldModel(this, this.resonance_strategy, this.truth_policy, this.schema_registry, pattern_matcher);
 
     const llmHandler = new LLMHandler(this.config.llm, this);
     this.procedure_handlers[llmHandler.name()] = llmHandler;

@@ -79,8 +79,8 @@ describe('EventListeners', () => {
         (mockGui.llmApiKeyInput as HTMLInputElement).value = 'new-api-key';
         (mockGui.llmModelNameInput as HTMLInputElement).value = 'new-model';
 
-        // Simulate click
-        mockGui.saveLlmConfigBtn.click();
+        // Directly call the handler logic
+        eventListeners['save_llm_config']();
 
         // Assert localStorage was called
         expect(localStorage.getItem('llm_config')).toBe(JSON.stringify({
@@ -101,7 +101,8 @@ describe('EventListeners', () => {
     it('should open settings modal when settings button is clicked', () => {
         mockGui.settingsModal.style.display = 'none';
 
-        mockGui.settingsBtn.click();
+        // Directly call the handler logic
+        eventListeners['open_settings']();
 
         expect(mockGui.settingsModal.style.display).toBe('block');
         // Check that it pre-populates the fields

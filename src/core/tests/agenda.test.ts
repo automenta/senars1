@@ -7,9 +7,13 @@ import { DefaultAttentionPolicy } from '../implementations';
 
 describe('Agenda (PriorityQueue)', () => {
   let agenda: Agenda;
+  const mockApp = {
+    emit: vi.fn(),
+  };
 
   beforeEach(() => {
-    agenda = new Agenda();
+    agenda = new Agenda(mockApp as any);
+    mockApp.emit.mockClear();
   });
 
   it('should be empty initially', async () => {

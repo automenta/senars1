@@ -60,6 +60,7 @@ describe('Renderer', () => {
                 last_scope_bindings: undefined,
                 last_scope_task: undefined,
                 is_task_pinned: vi.fn().mockReturnValue(false),
+                emit: vi.fn(),
             },
             activeThoughtsList: document.createElement('div'),
             completedThoughtsList: document.createElement('div'),

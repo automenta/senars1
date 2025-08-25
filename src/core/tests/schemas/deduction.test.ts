@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DeductionSchema } from '../../../core/schemas/deduction';
 import { WorldModel } from '../../../core/world-model';
 import { Task, SemanticAtom, TruthValue } from '../../../core/models';
@@ -6,6 +6,7 @@ import { DefaultTruthPolicy } from '../../../core/implementations';
 import { TaskType, UUID } from '../../../core/types';
 import { IResonanceStrategy } from '../../../core/interfaces';
 import { InMemoryPatternMatcher } from '../../../core/implementations';
+import { SchemaRegistry } from '../../../core/schema-registry';
 
 class MockResonance implements IResonanceStrategy {
     find_context(focus: Task, world_model: WorldModel, k: number): Task[] {
@@ -17,11 +18,16 @@ describe('DeductionSchema', () => {
     let schema: DeductionSchema;
     let world_model: WorldModel;
     let truth_policy: DefaultTruthPolicy;
+    const mockApp = {
+        emit: vi.fn(),
+    };
 
     beforeEach(() => {
         schema = new DeductionSchema();
         truth_policy = new DefaultTruthPolicy();
-        world_model = new WorldModel(new MockResonance(), truth_policy, new InMemoryPatternMatcher());
+        const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
+        world_model = new WorldModel(mockApp as any, new MockResonance(), truth_policy, schemaRegistry, new InMemoryPatternMatcher());
+        mockApp.emit.mockClear();
     });
 
     const create_task = async (id: UUID, content: string, truth: TruthValue): Promise<Task> => {

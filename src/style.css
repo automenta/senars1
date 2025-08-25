@@ -161,6 +161,12 @@ h2 {
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
+.action-btn:active, .feedback-btn:active {
+  transform: translateY(0px);
+  box-shadow: none;
+  background-color: #dcdcdc;
+}
+
 .thumb-up-btn:hover {
   background-color: #2ecc71;
   color: white;

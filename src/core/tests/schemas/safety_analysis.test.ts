@@ -15,12 +15,13 @@ describe('SafetyAnalysisSchema', () => {
   let schemaRegistry: SchemaRegistry;
 
   beforeEach(() => {
+    const mockApp = { emit: vi.fn() };
     safetyAnalysisSchema = new SafetyAnalysisSchema();
     mockTruthPolicy = new MockTruthPolicy();
     const resonanceStrategy = new MockResonanceStrategy();
     const patternMatcher = new InMemoryPatternMatcher();
     schemaRegistry = new SchemaRegistry(patternMatcher);
-    worldModel = new WorldModel(resonanceStrategy, mockTruthPolicy, schemaRegistry, patternMatcher);
+    worldModel = new WorldModel(mockApp as any, resonanceStrategy, mockTruthPolicy, schemaRegistry, patternMatcher);
   });
 
   it('should return the correct trigger pattern', () => {

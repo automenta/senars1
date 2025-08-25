@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WorldModel } from '../world-model';
 import { execute_procedure, is_procedure_task, extract_handler_name } from '../procedure';
 import { ProcedureHandler } from '../interfaces';
@@ -7,6 +7,7 @@ import { TaskType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { MockResonanceStrategy, MockTruthPolicy } from './world-model.test';
 import { InMemoryPatternMatcher } from '../implementations';
+import { SchemaRegistry } from '../schema-registry';
 
 class MockSuccessHandler implements ProcedureHandler {
   name = () => 'success';
@@ -47,7 +48,9 @@ describe('Procedure Framework', () => {
   beforeEach(() => {
     const resonanceStrategy = new MockResonanceStrategy();
     const truthPolicy = new MockTruthPolicy();
-    worldModel = new WorldModel(resonanceStrategy, truthPolicy, new InMemoryPatternMatcher());
+    const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
+    const mockApp = { emit: vi.fn() };
+    worldModel = new WorldModel(mockApp as any, resonanceStrategy, truthPolicy, schemaRegistry, new InMemoryPatternMatcher());
     handlers = {
       'success': new MockSuccessHandler(),
       'failure': new MockFailureHandler(),

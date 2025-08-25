@@ -88,17 +88,60 @@ export class Gui {
   public async init() {
     this.load_llm_config();
     this.event_listeners.attach_event_listeners();
+    this.bind_to_app_events();
     await this.renderer.render();
+    this.app.emit('render_complete', {});
+  }
+
+  private bind_to_app_events() {
+    this.app.on('task_added_to_agenda', (data: { task: Task }) => {
+        const guiTask = this.renderer['map_task_to_gui_task'](data.task);
+        this.renderer.add_thought_card(guiTask, false);
+        this.renderer['renderMetrics']();
+    });
+
+    this.app.on('task_removed_from_agenda', (data: { taskId: string }) => {
+        this.renderer.remove_thought_card(data.taskId);
+        this.renderer['renderMetrics']();
+    });
+
+    this.app.on('task_updated_in_agenda', (data: { task: Task }) => {
+        const guiTask = this.renderer['map_task_to_gui_task'](data.task);
+        this.renderer.update_thought_card(guiTask, false);
+        this.renderer['renderMetrics']();
+    });
+
+    this.app.on('belief_added_to_world_model', (data: { task: Task }) => {
+        const guiTask = this.renderer['map_task_to_gui_task'](data.task);
+        this.renderer.add_thought_card(guiTask, true);
+        this.renderer['renderMetrics']();
+    });
+
+    this.app.on('belief_updated_in_world_model', (data: { task: Task }) => {
+        const guiTask = this.renderer['map_task_to_gui_task'](data.task);
+        this.renderer.update_thought_card(guiTask, true);
+        this.renderer['renderMetrics']();
+    });
+
+    this.app.on('belief_removed_from_world_model', (data: { taskId: string }) => {
+        this.renderer.remove_thought_card(data.taskId);
+        this.renderer['renderMetrics']();
+    });
   }
 
   private load_llm_config() {
-      const configStr = localStorage.getItem('llmConfig');
+      const configStr = localStorage.getItem('llm_config');
       if (configStr) {
-          const config = JSON.parse(configStr);
-          this.llmApiKeyInput.value = config.apiKey || '';
-          this.llmModelNameInput.value = config.modelName || '';
-          this.app.update_llm_config(config);
-          this.llmConfigStatus.textContent = 'Loaded saved configuration.';
+          try {
+            const config = JSON.parse(configStr);
+            this.llmApiKeyInput.value = config.apiKey || '';
+            this.llmModelNameInput.value = config.modelName || '';
+            this.app.update_llm_config(config);
+            this.llmConfigStatus.textContent = 'Loaded saved configuration.';
+          } catch (e) {
+            console.error("Failed to parse LLM config from localStorage", e);
+            localStorage.removeItem('llm_config');
+          }
       }
   }
 }

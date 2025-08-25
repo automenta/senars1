@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AbductionSchema } from '../schemas/abduction';
 import { InductionSchema } from '../schemas/induction';
 import { Task, SemanticAtom } from '../models';
@@ -7,17 +7,23 @@ import { v4 as uuidv4 } from 'uuid';
 import { MockTruthPolicy, MockResonanceStrategy } from './world-model.test';
 import { WorldModel } from '../world-model';
 import { InMemoryPatternMatcher } from '../implementations';
+import { SchemaRegistry } from '../schema-registry';
 
 describe('AbductionSchema', () => {
   let abductionSchema: AbductionSchema;
   let mockTruthPolicy: MockTruthPolicy;
   let worldModel: WorldModel;
+  const mockApp = {
+    emit: vi.fn(),
+  };
 
   beforeEach(() => {
     abductionSchema = new AbductionSchema();
     mockTruthPolicy = new MockTruthPolicy();
     const resonanceStrategy = new MockResonanceStrategy();
-    worldModel = new WorldModel(resonanceStrategy, mockTruthPolicy, new InMemoryPatternMatcher());
+    const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
+    worldModel = new WorldModel(mockApp as any, resonanceStrategy, mockTruthPolicy, schemaRegistry, new InMemoryPatternMatcher());
+    mockApp.emit.mockClear();
   });
 
   it('should derive the premise from an implication and a conclusion', async () => {
@@ -42,12 +48,17 @@ describe('InductionSchema', () => {
   let inductionSchema: InductionSchema;
   let mockTruthPolicy: MockTruthPolicy;
   let worldModel: WorldModel;
+  const mockApp = {
+    emit: vi.fn(),
+  };
 
   beforeEach(() => {
     inductionSchema = new InductionSchema();
     mockTruthPolicy = new MockTruthPolicy();
     const resonanceStrategy = new MockResonanceStrategy();
-    worldModel = new WorldModel(resonanceStrategy, mockTruthPolicy);
+    const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
+    worldModel = new WorldModel(mockApp as any, resonanceStrategy, mockTruthPolicy, schemaRegistry);
+    mockApp.emit.mockClear();
   });
 
   it('should induce an implication from two co-occurring facts', async () => {

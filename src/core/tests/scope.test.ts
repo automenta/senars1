@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { parseScopeVariables, resolveScopeBindings, substituteInContent } from '../scope';
 import { Task, SemanticAtom, AttentionValue, DerivationStamp } from '../models';
 import { WorldModel } from '../world-model';
@@ -6,16 +6,22 @@ import { TaskType, UUID } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { MockResonanceStrategy, MockTruthPolicy } from './world-model.test';
 import { InMemoryPatternMatcher } from '../implementations';
+import { SchemaRegistry } from '../schema-registry';
 
 describe('Scope Parsing and Resolution', () => {
   let worldModel: WorldModel;
   let mockTruthPolicy: MockTruthPolicy;
   let mockResonanceStrategy: MockResonanceStrategy;
+  const mockApp = {
+    emit: vi.fn(),
+  };
 
   beforeEach(() => {
     mockResonanceStrategy = new MockResonanceStrategy();
     mockTruthPolicy = new MockTruthPolicy();
-    worldModel = new WorldModel(mockResonanceStrategy, mockTruthPolicy, new InMemoryPatternMatcher());
+    const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
+    worldModel = new WorldModel(mockApp as any, mockResonanceStrategy, mockTruthPolicy, schemaRegistry, new InMemoryPatternMatcher());
+    mockApp.emit.mockClear();
   });
 
   describe('parseScopeVariables', () => {

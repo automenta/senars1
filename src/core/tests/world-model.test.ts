@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WorldModel } from '../world-model';
 import { SemanticAtom, Task } from '../models';
 import { IResonanceStrategy, ITruthPolicy } from '../interfaces';
 import { InMemoryPatternMatcher } from '../implementations';
 import { TaskType, UUID } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { SchemaRegistry } from '../schema-registry';
 
 export class MockResonanceStrategy implements IResonanceStrategy {
   find_context(focus: Task, world_model: WorldModel, k: number): Task[] {
@@ -25,6 +26,10 @@ describe('WorldModel', () => {
   let worldModel: WorldModel;
   let resonanceStrategy: IResonanceStrategy;
   let truthPolicy: ITruthPolicy;
+  let schemaRegistry: SchemaRegistry;
+  const mockApp = {
+    emit: vi.fn(),
+  };
 
   const create_atom = (content: string): SemanticAtom => ({
     id: uuidv4(),
@@ -45,7 +50,9 @@ describe('WorldModel', () => {
   beforeEach(() => {
     resonanceStrategy = new MockResonanceStrategy();
     truthPolicy = new MockTruthPolicy();
-    worldModel = new WorldModel(resonanceStrategy, truthPolicy, new InMemoryPatternMatcher());
+    schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
+    worldModel = new WorldModel(mockApp as any, resonanceStrategy, truthPolicy, schemaRegistry, new InMemoryPatternMatcher());
+    mockApp.emit.mockClear();
   });
 
   it('should add and retrieve an atom', async () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WorldModel } from '../../world-model';
 import { TestAnalysisSchema } from '../../schemas/test_analysis';
 import { MockResonanceStrategy, MockTruthPolicy } from '../world-model.test';
@@ -6,6 +6,7 @@ import { InMemoryPatternMatcher } from '../../implementations';
 import { Task, SemanticAtom } from '../../models';
 import { TaskType } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
+import { SchemaRegistry } from '../../schema-registry';
 
 describe('TestAnalysisSchema', () => {
     let worldModel: WorldModel;
@@ -13,9 +14,11 @@ describe('TestAnalysisSchema', () => {
     let truthPolicy: MockTruthPolicy;
 
     beforeEach(() => {
+        const mockApp = { emit: vi.fn() };
         const resonanceStrategy = new MockResonanceStrategy();
         truthPolicy = new MockTruthPolicy();
-        worldModel = new WorldModel(resonanceStrategy, truthPolicy, new InMemoryPatternMatcher());
+        const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
+        worldModel = new WorldModel(mockApp as any, resonanceStrategy, truthPolicy, schemaRegistry, new InMemoryPatternMatcher());
         schema = new TestAnalysisSchema();
     });
 

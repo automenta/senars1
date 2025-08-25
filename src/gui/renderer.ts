@@ -17,13 +17,31 @@ export class Renderer {
         this.gui.activeThoughtsList.innerHTML = activeTasks.map(t => this.renderThoughtCard(t, false)).join('');
         this.gui.completedThoughtsList.innerHTML = completedTasks.map(t => this.renderThoughtCard(t, true)).join('');
 
-        // These will be moved to the event listener class
-        // this.attach_active_thought_listeners();
-        // this.attach_hold_listener();
-        // this.attach_knowledge_action_listeners();
         await this.renderMetrics();
         this.render_schemas();
         this.render_scope_debugger();
+
+        // Emit render_complete event so other modules can react
+        this.gui.app.emit('render_complete', {});
+    }
+
+    public add_thought_card(task: GuiTask, isCompleted: boolean) {
+        const list = isCompleted ? this.gui.completedThoughtsList : this.gui.activeThoughtsList;
+        const cardHTML = this.renderThoughtCard(task, isCompleted);
+        list.insertAdjacentHTML('afterbegin', cardHTML);
+        this.gui.app.emit('render_complete', {}); // For gestures
+    }
+
+    public remove_thought_card(taskId: string) {
+        const card = document.querySelector(`.thought-card[data-task-id="${taskId}"]`);
+        if (card) {
+            card.remove();
+        }
+    }
+
+    public update_thought_card(task: GuiTask, isCompleted: boolean) {
+        this.remove_thought_card(task.id);
+        this.add_thought_card(task, isCompleted);
     }
 
     private render_scope_debugger() {
@@ -250,17 +268,17 @@ export class Renderer {
 
         const feedbackActions = `
       <div class="feedback-actions">
-        <button class="action-btn feedback-btn thumb-up-btn" data-task-id="${task.id}" title="This is correct/important">👍</button>
-        <button class="action-btn feedback-btn thumb-down-btn" data-task-id="${task.id}" title="This is incorrect/unimportant">👎</button>
+        <button class="action-btn feedback-btn thumb-up-btn" data-task-id="${task.id}" data-action="${isCompleted ? 'verify-belief' : 'boost-task'}" title="This is correct/important">👍</button>
+        <button class="action-btn feedback-btn thumb-down-btn" data-task-id="${task.id}" data-action="${isCompleted ? 'dispute-belief' : 'reduce-task'}" title="This is incorrect/unimportant">👎</button>
       </div>
     `;
 
         if (isCompleted) {
             details.push(`<div class="knowledge-actions">
             ${feedbackActions}
-            <button class="action-btn star-btn" data-task-id="${task.id}">⭐ Star</button>
-            <button class="action-btn question-btn" data-task-id="${task.id}">❓ Question</button>
-            <button class="action-btn forget-btn" data-task-id="${task.id}">🗑️ Forget</button>
+            <button class="action-btn star-btn" data-task-id="${task.id}" data-action="star-belief">⭐ Star</button>
+            <button class="action-btn question-btn" data-task-id="${task.id}" data-action="question-belief">❓ Question</button>
+            <button class="action-btn forget-btn" data-task-id="${task.id}" data-action="forget-belief">🗑️ Forget</button>
           </div>`);
         }
 

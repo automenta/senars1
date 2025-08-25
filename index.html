@@ -13,8 +13,8 @@
         <h1>THINKING TODO LIST</h1>
         <div class="controls">
           <input type="text" id="new-thought-input" placeholder="New Thought..." />
-          <button id="add-new-thought-button">Add</button>
-          <button id="settings-btn">Settings</button>
+          <button id="add-new-thought-button" data-action="add-new-thought">Add</button>
+          <button id="settings-btn" data-action="open-settings">Settings</button>
         </div>
         <div id="thought-expansion-suggestion" style="display: none;"></div>
       </header>
@@ -82,7 +82,7 @@
 
     <div id="settings-modal" class="modal">
       <div class="modal-content">
-        <span class="close-btn">&times;</span>
+        <span class="close-btn" data-action="close-settings">&times;</span>
         <h2>Settings</h2>
         <div class="setting">
           <label for="user-mode-select">User Mode:</label>
@@ -103,7 +103,7 @@
             <label for="llm-model-name">Model Name:</label>
             <input type="text" id="llm-model-name" placeholder="e.g., gpt-4">
         </div>
-        <button id="save-llm-config-btn">Save</button>
+        <button id="save-llm-config-btn" data-action="save-llm-config">Save</button>
         <p id="llm-config-status"></p>
       </div>
     </div>

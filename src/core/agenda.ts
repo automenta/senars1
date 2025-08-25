@@ -2,6 +2,7 @@ import { Task } from './models';
 import PriorityQueueLib from 'ts-priority-queue';
 import { Mutex } from 'async-mutex';
 import { IAttentionPolicy } from './interfaces';
+import { App } from '../app'; // Circular dependency, but only for types
 
 export class Agenda {
   private queue: PriorityQueueLib<Task>;
@@ -9,8 +10,10 @@ export class Agenda {
   private mutex = new Mutex();
   private last_decay_timestamp: number;
   private pinned_tasks: Set<string> = new Set();
+  private app: App;
 
-  constructor() {
+  constructor(app: App) {
+    this.app = app;
     this.queue = new PriorityQueueLib({
       comparator: (a: Task, b: Task) => b.attention.priority - a.attention.priority,
     });
@@ -38,6 +41,7 @@ export class Agenda {
       }
       this.queue.queue(task);
       this.tasks_map.set(task.id, task);
+      this.app.emit('task_added_to_agenda', { task });
     } finally {
       release();
     }
@@ -51,6 +55,7 @@ export class Agenda {
       }
       const task = this.queue.dequeue();
       this.tasks_map.delete(task.id);
+      this.app.emit('task_removed_from_agenda', { taskId: task.id });
       return task;
     } finally {
       release();
@@ -108,6 +113,7 @@ export class Agenda {
                     this.queue.queue(t);
                 }
             });
+            this.app.emit('task_updated_in_agenda', { task });
         }
     } finally {
       release();
@@ -147,10 +153,15 @@ export class Agenda {
   }
 
   pin_task(taskId: string) {
-    if (this.pinned_tasks.has(taskId)) {
+    const is_pinned = this.pinned_tasks.has(taskId);
+    if (is_pinned) {
       this.pinned_tasks.delete(taskId);
     } else {
       this.pinned_tasks.add(taskId);
+    }
+    const task = this.tasks_map.get(taskId);
+    if (task) {
+        this.app.emit('task_updated_in_agenda', { task });
     }
   }
 

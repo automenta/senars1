@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { InductionSchema } from '../../schemas/induction';
 import { WorldModel } from '../../world-model';
 import { Task, SemanticAtom } from '../../models';
@@ -13,11 +13,12 @@ describe('InductionSchema', () => {
   let induction_schema: InductionSchema;
 
   beforeEach(() => {
+    const mockApp = { emit: vi.fn() };
     const resonance_strategy = new DefaultResonanceStrategy();
     truth_policy = new DefaultTruthPolicy();
     const pattern_matcher = new InMemoryPatternMatcher();
     const schema_registry = new SchemaRegistry(pattern_matcher);
-    world_model = new WorldModel(resonance_strategy, truth_policy, schema_registry, pattern_matcher);
+    world_model = new WorldModel(mockApp as any, resonance_strategy, truth_policy, schema_registry, pattern_matcher);
     induction_schema = new InductionSchema();
   });
 

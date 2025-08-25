@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DeductionSchema } from '../schemas';
 import { Task, SemanticAtom, AttentionValue, DerivationStamp, TruthValue } from '../models';
 import { TaskType, UUID } from '../types';
@@ -6,17 +6,23 @@ import { v4 as uuidv4 } from 'uuid';
 import { MockTruthPolicy, MockResonanceStrategy } from './world-model.test'; // Reusing mocks
 import { WorldModel } from '../world-model';
 import { InMemoryPatternMatcher } from '../implementations';
+import { SchemaRegistry } from '../schema-registry';
 
 describe('DeductionSchema', () => {
   let deductionSchema: DeductionSchema;
   let mockTruthPolicy: MockTruthPolicy;
   let worldModel: WorldModel;
+  const mockApp = {
+    emit: vi.fn(),
+  };
 
   beforeEach(() => {
     deductionSchema = new DeductionSchema();
     mockTruthPolicy = new MockTruthPolicy();
     const resonanceStrategy = new MockResonanceStrategy();
-    worldModel = new WorldModel(resonanceStrategy, mockTruthPolicy, new InMemoryPatternMatcher());
+    const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
+    worldModel = new WorldModel(mockApp as any, resonanceStrategy, mockTruthPolicy, schemaRegistry, new InMemoryPatternMatcher());
+    mockApp.emit.mockClear();
   });
 
   it('should return the correct trigger pattern', () => {
