@@ -58,6 +58,12 @@
             <div class="metric-item">
               <strong>Energy Trend:</strong> <span id="energy-trend-metric">N/A</span>
             </div>
+            <div class="metric-item">
+              <strong>Active Workers:</strong> <span id="active-workers-metric">N/A</span>
+            </div>
+            <div class="metric-item">
+              <strong>Tasks/Sec:</strong> <span id="tasks-per-sec-metric">N/A</span>
+            </div>
           </div>
           <div id="priority-distribution">
             <h4>Priority Distribution</h4>
@@ -93,6 +99,13 @@
             <option value="expert">Expert Mode</option>
             <option value="debugger">Debugger Mode</option>
           </select>
+        </div>
+        <hr/>
+        <h3>Engine Controls</h3>
+        <div class="setting">
+          <label for="worker-count-slider">Worker Threads (CPU Throttle):</label>
+          <input type="range" id="worker-count-slider" min="1" max="16" value="2">
+          <span id="worker-count-value">2</span>
         </div>
         <hr/>
         <h3>LLM Configuration</h3>

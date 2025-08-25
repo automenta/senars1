@@ -48,3 +48,9 @@ export function is_schema_pattern(content: string): boolean {
   const schema_var_regex = /\$[\w\d]+|%\w+/;
   return schema_var_regex.test(content);
 }
+
+/**
+ * A simple promise-based sleep function.
+ * @param ms The number of milliseconds to sleep.
+ */
+export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

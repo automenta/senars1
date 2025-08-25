@@ -14,6 +14,8 @@ export class MetricsComponent {
     private highPriorityValue: HTMLElement;
     private medPriorityValue: HTMLElement;
     private lowPriorityValue: HTMLElement;
+    private activeWorkersMetric: HTMLElement;
+    private tasksPerSecMetric: HTMLElement;
 
     constructor(gui: Gui) {
         this.gui = gui;
@@ -28,6 +30,8 @@ export class MetricsComponent {
         this.highPriorityValue = document.getElementById('high-priority-value')!;
         this.medPriorityValue = document.getElementById('med-priority-value')!;
         this.lowPriorityValue = document.getElementById('low-priority-value')!;
+        this.activeWorkersMetric = document.getElementById('active-workers-metric')!;
+        this.tasksPerSecMetric = document.getElementById('tasks-per-sec-metric')!;
 
         this.subscribe_to_events();
     }
@@ -55,6 +59,11 @@ export class MetricsComponent {
         this.activeThoughtsMetric.textContent = String(metrics.active_thoughts);
         this.memoryMetric.textContent = metrics.memory;
         this.energyTrendMetric.textContent = metrics.energy_trend;
+
+        // Worker Pool Metrics
+        const busyWorkers = this.gui.workerPool.getSize() - this.gui.workerPool.getFreeWorkerCount();
+        this.activeWorkersMetric.textContent = `${busyWorkers} / ${this.gui.workerPool.getSize()}`;
+        this.tasksPerSecMetric.textContent = this.gui.workerPool.getTasksPerSecond().toFixed(2);
 
         const dist = metrics.priority_distribution;
         this.highPriorityBar.style.width = totalActive > 0 ? `${(dist.high / totalActive) * 100}%` : '0%';

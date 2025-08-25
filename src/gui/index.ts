@@ -16,6 +16,7 @@ import { NotificationComponent } from './components/NotificationComponent';
 import { MetricsComponent } from './components/MetricsComponent';
 import { ActiveThoughtsComponent } from './components/ActiveThoughtsComponent';
 import { CompletedThoughtsComponent } from './components/CompletedThoughtsComponent';
+import { WorkerPool } from './worker-pool';
 
 export class Gui {
   world_model: WorldModel;
@@ -30,6 +31,7 @@ export class Gui {
   metricsComponent: MetricsComponent;
   activeThoughtsComponent: ActiveThoughtsComponent;
   completedThoughtsComponent: CompletedThoughtsComponent;
+  workerPool: WorkerPool;
 
   // DOM Elements
   schemaList: HTMLElement;
@@ -38,10 +40,14 @@ export class Gui {
   addNewThoughtButton: HTMLElement;
   userModeSelect: HTMLSelectElement;
   container: HTMLElement;
+  workerCountSlider: HTMLInputElement;
 
   state: {
     currentMode: string;
     pinnedTaskIds: Set<string>;
+    simulationRunning: boolean;
+    simulationIntervalId?: number;
+    simulationSpeed: number;
   };
   lastEnergyLevel: number = 0;
 
@@ -49,6 +55,8 @@ export class Gui {
     this.state = {
       currentMode: 'thinking',
       pinnedTaskIds: new Set(),
+      simulationRunning: false,
+      simulationSpeed: 100, // ms per tick
     };
     this.app = app;
     this.world_model = world_model;
@@ -62,6 +70,9 @@ export class Gui {
     this.metricsComponent = new MetricsComponent(this);
     this.activeThoughtsComponent = new ActiveThoughtsComponent(this);
     this.completedThoughtsComponent = new CompletedThoughtsComponent(this);
+    // The '/src/core/worker.ts' path is resolved by Vite's worker loader
+    this.workerPool = new WorkerPool(this.app, '/src/core/worker.ts', 2);
+
 
     // Cache all DOM element selections
     this.schemaList = document.getElementById('schema-list')!;
@@ -69,6 +80,7 @@ export class Gui {
     this.newThoughtInput = document.getElementById('new-thought-input') as HTMLInputElement;
     this.addNewThoughtButton = document.getElementById('add-new-thought-button')!;
     this.userModeSelect = document.getElementById('user-mode-select') as HTMLSelectElement;
+    this.workerCountSlider = document.getElementById('worker-count-slider') as HTMLInputElement;
     this.container = document.querySelector('.container')!;
   }
 
@@ -76,8 +88,58 @@ export class Gui {
     this.load_llm_config();
     this.bind_app_events_to_gui_events();
     this.event_listeners.attach_event_listeners();
-    await this.renderer.render();
+    await this.workerPool.init();
+    // Do not autostart simulation in test environment
+    if (import.meta.env.MODE !== 'test') {
+        this.startSimulation();
+    }
     this.event_bus.emit('render_complete', {});
+  }
+
+  public startSimulation() {
+      if (this.state.simulationRunning) return;
+      this.state.simulationRunning = true;
+
+      const gameLoop = async () => {
+          // Main simulation logic
+          await this.app.tick(); // Decay and other global updates
+          await this.dispatchTasks();
+          await this.renderer.render();
+
+          // Reschedule the next loop iteration
+          this.state.simulationIntervalId = window.setTimeout(gameLoop, this.state.simulationSpeed);
+      };
+
+      this.state.simulationIntervalId = window.setTimeout(gameLoop, this.state.simulationSpeed);
+  }
+
+  public stopSimulation() {
+      if (!this.state.simulationRunning) return;
+      this.state.simulationRunning = false;
+      if (this.state.simulationIntervalId) {
+          window.clearTimeout(this.state.simulationIntervalId);
+          this.state.simulationIntervalId = undefined;
+      }
+  }
+
+  public setSimulationSpeed(speed: number) {
+      this.state.simulationSpeed = speed;
+  }
+
+  public async dispatchTasks() {
+      const freeWorkers = this.workerPool.getFreeWorkerCount();
+      if (freeWorkers === 0) return;
+
+      const agendaSize = await this.app.agenda.size();
+      if (agendaSize === 0) return;
+
+      const tasksToDispatch = Math.min(freeWorkers, agendaSize);
+      for (let i = 0; i < tasksToDispatch; i++) {
+          const task = await this.app.agenda.pop();
+          if (task) {
+              this.workerPool.dispatchTask(task);
+          }
+      }
   }
 
   private bind_app_events_to_gui_events() {

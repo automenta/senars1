@@ -3,42 +3,26 @@ import { JSDOM } from 'jsdom';
 import { EventListeners } from './event-listeners';
 import { Gui } from './index';
 import { App } from '../app';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 // Mock Gui and App
 vi.mock('./index');
 vi.mock('../app');
-
-const dom = new JSDOM(`
-  <!doctype html>
-  <html>
-    <body>
-      <button id="settings-btn"></button>
-      <div id="settings-modal" style="display: none;">
-        <input id="llm-api-key" value="test-key" />
-        <input id="llm-model-name" value="test-model" />
-        <button id="save-llm-config-btn"></button>
-        <p id="llm-config-status"></p>
-        <span class="close-btn"></span>
-      </div>
-       <input id="new-thought-input" />
-       <button id="add-new-thought-button"></button>
-       <select id="user-mode-select"></select>
-       <div id="completed-thoughts-list"></div>
-       <div id="active-thoughts-list"></div>
-    </body>
-  </html>
-`, { url: 'http://localhost' });
-global.document = dom.window.document;
-global.window = dom.window as unknown as Window & typeof globalThis;
-global.localStorage = dom.window.localStorage;
-global.HTMLSelectElement = dom.window.HTMLSelectElement;
 
 describe('EventListeners', () => {
     let eventListeners: EventListeners;
     let mockGui: any;
     let mockApp: any;
 
-    beforeEach(() => {
+    beforeEach(async () => {
+        const html = await fs.readFile(path.resolve(__dirname, '../../index.html'), 'utf-8');
+        const dom = new JSDOM(html, { url: 'http://localhost' });
+        global.document = dom.window.document;
+        global.window = dom.window as unknown as Window & typeof globalThis;
+        global.localStorage = dom.window.localStorage;
+        global.HTMLSelectElement = dom.window.HTMLSelectElement;
+
         vi.clearAllMocks();
 
         mockApp = {
@@ -62,6 +46,7 @@ describe('EventListeners', () => {
             newThoughtInput: document.getElementById('new-thought-input'),
             addNewThoughtButton: document.getElementById('add-new-thought-button'),
             userModeSelect: document.getElementById('user-mode-select'),
+            workerCountSlider: document.getElementById('worker-count-slider'),
             completedThoughtsList: document.getElementById('completed-thoughts-list'),
             activeThoughtsList: document.getElementById('active-thoughts-list'),
             container: document.body,

@@ -17,6 +17,7 @@ export class EventListeners {
         // Other top-level listeners
         this.gui.userModeSelect.addEventListener('change', this.handle_user_mode_change.bind(this));
         this.gui.newThoughtInput.addEventListener('keydown', this.handle_new_thought_keypress.bind(this));
+        this.gui.workerCountSlider.addEventListener('input', this.handle_worker_count_change.bind(this));
 
         // Listen for re-renders to attach gesture listeners
         this.gui.event_bus.on('render_complete', this.attach_gesture_listeners.bind(this));
@@ -24,6 +25,18 @@ export class EventListeners {
         this.gui.event_bus.on('suggestion_generated', (question: string) => {
             this.gui.renderer.render_suggestion(question);
         });
+    }
+
+    private handle_worker_count_change(event: Event) {
+        const target = event.target as HTMLInputElement;
+        const newSize = parseInt(target.value, 10);
+
+        const valueElement = document.getElementById('worker-count-value');
+        if (valueElement) {
+            valueElement.textContent = String(newSize);
+        }
+
+        this.gui.workerPool.setSize(newSize);
     }
 
     private async handle_container_click(event: MouseEvent) {
