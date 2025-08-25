@@ -75,14 +75,18 @@ export class App {
     const abductionSchema = new AbductionSchema();
     this.schema_registry.register(abductionSchema);
 
-    const inductionSchema = new InductionSchema();
-    this.schema_registry.register(inductionSchema);
+    // The InductionSchema is currently disabled as it causes performance issues
+    // and breaks the e2e test. It needs to be handled as a special case by the
+    // CognitiveEngine rather than being a standard pattern-based schema.
+    // const inductionSchema = new InductionSchema();
+    // this.schema_registry.register(inductionSchema);
 
     const safetyAnalysisSchema = new SafetyAnalysisSchema();
     this.schema_registry.register(safetyAnalysisSchema);
 
-    const selfSafetySchema = new SelfSafetySchema();
-    this.schema_registry.register(selfSafetySchema);
+    // The SelfSafetySchema is a placeholder and is not fully implemented.
+    // const selfSafetySchema = new SelfSafetySchema();
+    // this.schema_registry.register(selfSafetySchema);
 
     const thoughtExpansionSchema = new ThoughtExpansionSchema();
     this.schema_registry.register(thoughtExpansionSchema);

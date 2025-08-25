@@ -3,60 +3,93 @@ export interface SExpression {
   args: (string | SExpression)[];
 }
 
-// A robust S-expression parser.
-// This is a simplified version of a recursive descent parser.
-function parseSExpressionRecursive(tokens: string[]): [SExpression | string, number] {
-    let token = tokens[0];
-    if (token === undefined) {
-        throw new Error("Unexpected end of input.");
+function tokenize(s: string): string[] {
+    const tokens: string[] = [];
+    let current = '';
+    let inQuote = false;
+
+    for (let i = 0; i < s.length; i++) {
+        const char = s[i];
+
+        if (char === '"') {
+            inQuote = !inQuote;
+            current += char;
+        } else if (!inQuote && (char === '(' || char === ')')) {
+            if (current) {
+                tokens.push(current);
+                current = '';
+            }
+            tokens.push(char);
+        } else if (!inQuote && /\s/.test(char)) {
+            if (current) {
+                tokens.push(current);
+                current = '';
+            }
+        } else {
+            current += char;
+        }
     }
 
-    if (token === '(' || token === '{') {
-        const end_token = token === '(' ? ')' : '}';
-        const expr: SExpression = { head: '', args: [] };
-        if (token === '{') {
-            expr.head = 'scope';
-        }
-        let i = 1;
+    if (current) {
+        tokens.push(current);
+    }
 
-        // The head of the S-expression.
-        if (expr.head === '' && tokens[i] && tokens[i] !== '(' && tokens[i] !== ')') {
-            expr.head = tokens[i];
-            i++;
-        }
+    return tokens;
+}
 
-        // The arguments of the S-expression.
-        while (tokens[i] && tokens[i] !== end_token) {
-            const [arg, consumed] = parseSExpressionRecursive(tokens.slice(i));
-            expr.args.push(arg);
-            i += consumed;
-        }
+function parseRecursive(tokens: string[]): [SExpression, string[]] {
+  if (tokens.length === 0) {
+    throw new Error("Unexpected end of input, expected '('.");
+  }
+  let token = tokens.shift();
+  if (token !== '(') {
+    throw new Error(`Unexpected token: ${token}, expected '('.`);
+  }
 
-        if (tokens[i] !== end_token) {
-            throw new Error(`Expected '${end_token}' at the end of S-expression.`);
-        }
+  const result: SExpression = { head: '', args: [] };
+  let headSet = false;
 
-        return [expr, i + 1];
-    } else if (token === ')' || token === '}') {
-        throw new Error(`Unexpected '${token}' token.`);
+  while (tokens.length > 0 && tokens[0] !== ')') {
+    if (tokens[0] === '(') {
+      const [nestedExpr, remainingTokens] = parseRecursive(tokens);
+      result.args.push(nestedExpr);
+      tokens = remainingTokens;
     } else {
-        return [token, 1];
+      const value = tokens.shift()!;
+      if (!headSet) {
+        result.head = value;
+        headSet = true;
+      } else {
+        result.args.push(value);
+      }
     }
+  }
+
+  if (tokens.length === 0) {
+    throw new Error("Unexpected end of input, expected ')'.");
+  }
+  tokens.shift(); // Consume ')'
+
+  if (!result.head && result.args.length > 0) {
+      const firstArg = result.args.shift();
+      if(typeof firstArg === 'string') {
+          result.head = firstArg;
+      } else {
+          result.args.unshift(firstArg!);
+      }
+  }
+
+  return [result, tokens];
 }
 
 export function parseSExpression(sExpr: string): SExpression {
-    const tokens = sExpr.replace(/\(/g, ' ( ').replace(/\)/g, ' ) ').replace(/{/g, ' { ').replace(/}/g, ' } ').trim().split(/\s+/);
-    const [result, consumed] = parseSExpressionRecursive(tokens);
-    if (consumed < tokens.length) {
-        // This can happen with multiple top-level S-expressions, which is not supported.
-        console.warn("Input has extra tokens that were not consumed.", { consumed, tokens });
-    }
-    if (typeof result === 'string') {
-        // Allow single-token S-expressions if they are scope expressions
-        if (sExpr.trim().startsWith('{')) {
-            return { head: 'scope', args: [result] };
-        }
+    const tokens = tokenize(sExpr);
+    if (tokens[0] !== '(') {
         throw new Error("A single token is not a valid S-Expression. Must be enclosed in parentheses.");
+    }
+    const [result, remainingTokens] = parseRecursive(tokens);
+    if (remainingTokens.length > 0) {
+        throw new Error(`Unexpected extra tokens at the end of input: ${remainingTokens.join(' ')}`);
     }
     return result;
 }
@@ -65,6 +98,12 @@ export function sExpressionToString(sExpr: SExpression | string): string {
   if (typeof sExpr === 'string') {
     return sExpr;
   }
-  const args = sExpr.args.map(arg => sExpressionToString(arg)).join(' ');
-  return `(${sExpr.head} ${args})`.trim();
+
+  const parts = [];
+  if (sExpr.head) {
+    parts.push(sExpr.head);
+  }
+  sExpr.args.forEach(arg => parts.push(sExpressionToString(arg)));
+
+  return `(${parts.join(' ')})`;
 }
