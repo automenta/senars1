@@ -10,6 +10,8 @@ import { SchemaRegistry } from './core/schema-registry';
 import { DeductionSchema } from './core/schemas';
 import { AbductionSchema } from './core/schemas/abduction';
 import { InductionSchema } from './core/schemas/induction';
+import { SafetyAnalysisSchema } from './core/schemas/safety_analysis';
+import { SelfSafetySchema } from './core/schemas/self_safety';
 import { seed_data } from './core/seed';
 import { CognitiveEngine } from './core/engine'; // Import the new engine
 import { loadConfig, Config, LLMConfig } from './core/config';
@@ -66,6 +68,12 @@ export class App {
 
     const inductionSchema = new InductionSchema();
     this.schema_registry.register(inductionSchema);
+
+    const safetyAnalysisSchema = new SafetyAnalysisSchema();
+    this.schema_registry.register(safetyAnalysisSchema);
+
+    const selfSafetySchema = new SelfSafetySchema();
+    this.schema_registry.register(selfSafetySchema);
 
     if (seedData) {
       seed_data(this.world_model, this.agenda, this.attention_policy);
