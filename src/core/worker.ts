@@ -9,12 +9,12 @@ import { DeductionSchema } from './schemas/deduction';
 import { AbductionSchema } from './schemas/abduction';
 import { InductionSchema } from './schemas/induction';
 import { SafetyAnalysisSchema } from './schemas/safety_analysis';
-// SelfSafetySchema is being replaced by a direct implementation in the worker
-// import { SelfSafetySchema } from './schemas/self_safety';
 import { ThoughtExpansionSchema } from './schemas/thought_expansion';
 import { Task, SemanticAtom } from './models';
 import { Config } from './config';
 import { v4 as uuidv4 } from 'uuid';
+import { execute_procedure, is_procedure_task } from './procedure';
+import { resolveScopeBindings } from './scope';
 
 let engine: CognitiveEngine;
 let worldModel: WorldModel;
@@ -62,13 +62,12 @@ class WorkerApp {
         schemaRegistry.register(new DeductionSchema());
         schemaRegistry.register(new AbductionSchema());
         schemaRegistry.register(new SafetyAnalysisSchema());
-        // schemaRegistry.register(new SelfSafetySchema());
         schemaRegistry.register(new ThoughtExpansionSchema());
     }
 
     // A mock emit function, as workers don't have a GUI to update
     emit(eventName: string, data: any) {
-        // In the future, this could post messages back for logging/debugging
+        // This could post messages back for logging/debugging in the future
     }
 }
 
@@ -78,7 +77,6 @@ self.onmessage = async (event: MessageEvent) => {
 
     switch (type) {
         case 'init':
-            console.log('Worker: Initializing...');
             new WorkerApp(payload.config);
             self.postMessage({ type: 'ready' });
             break;
@@ -91,13 +89,13 @@ self.onmessage = async (event: MessageEvent) => {
 
         case 'process':
             const { task } = payload;
-            console.log(`Worker: Processing task ${task.id}`);
             try {
-                const derivedTasks = await processTask(task);
+                const { derivedTasks, newAtoms } = await processTask(task);
                 self.postMessage({
                     type: 'result',
                     payload: {
                         derivedTasks,
+                        newAtoms, // Send new atoms back to the main thread
                         parentTaskId: task.id
                     }
                 });
@@ -115,9 +113,12 @@ self.onmessage = async (event: MessageEvent) => {
     }
 };
 
-async function processTask(task_a: Task): Promise<Task[]> {
+async function processTask(task_a: Task): Promise<{ derivedTasks: Task[], newAtoms: SemanticAtom[] }> {
     let allDerivedTasks: Task[] = [];
     const DERIVATION_THRESHOLD = 20; // Safety threshold
+
+    // Snapshot atom IDs before processing
+    const initialAtomIds = new Set(Object.keys(worldModel.atoms));
 
     const context = worldModel.find_resonant(task_a, 10);
     const scope_bindings = resolveScopeBindings(task_a, context, worldModel);
@@ -131,39 +132,40 @@ async function processTask(task_a: Task): Promise<Task[]> {
         allDerivedTasks.push(...single_premise_derived, ...dual_premise_derived);
     }
 
-    // Self-Safety Check: Did this task generate an excessive number of new tasks?
+    // Self-Safety Check
     if (allDerivedTasks.length > DERIVATION_THRESHOLD) {
         const parent_atom_content = worldModel.get_atom(task_a.atom_id).content;
         const warning_content = `(excessive_derivation_warning (parent_task "${parent_atom_content}") (derived_count ${allDerivedTasks.length}))`;
-
-        const warning_atom: SemanticAtom = {
-            id: uuidv4(),
-            content: warning_content,
-            embedding: [], // No embedding for internal warnings
-        };
-        // This has to be done on the main thread, but we can create the atom here
-        // and the main thread can add it. For now, we just create the task.
+        const warning_atom: SemanticAtom = { id: uuidv4(), content: warning_content, embedding: [] };
+        worldModel.add_atom(warning_atom); // Add to worker's model to be collected later
 
         const warning_task: Task = {
             id: uuidv4(),
-            atom_id: warning_atom.id, // This atom won't exist in the main model yet
+            atom_id: warning_atom.id,
             type: 'BELIEF',
-            attention: { priority: 0.95, durability: 0.9 }, // High priority warning
+            attention: { priority: 0.95, durability: 0.9 },
             truth: { frequency: 1.0, confidence: 1.0 },
-            stamp: {
-                timestamp: Date.now() / 1000,
-                parent_ids: [task_a.id],
-                schema_id: uuidv4(), // Special ID for safety system
-            },
-            // A bit of a hack: include the atom itself so the main thread can add it.
-            _atom_to_add: warning_atom
+            stamp: { timestamp: Date.now() / 1000, parent_ids: [task_a.id], schema_id: uuidv4() },
         };
         allDerivedTasks.push(warning_task);
     }
 
-    return allDerivedTasks;
+    // Collect all newly created atoms
+    const newAtoms: SemanticAtom[] = [];
+    for (const task of allDerivedTasks) {
+        // If the atom for this task is new, add it to our list.
+        if (!initialAtomIds.has(task.atom_id)) {
+            const atom = worldModel.get_atom(task.atom_id);
+            if (atom) {
+                newAtoms.push(atom);
+            }
+        }
+    }
+
+    return { derivedTasks: allDerivedTasks, newAtoms };
 }
 
+// ... (The rest of the functions: handle_procedure_task, handle_single_premise_task, etc. remain the same)
 async function handle_procedure_task(task: Task, scope_bindings?: Record<string, string>): Promise<Task[]> {
     const results = await execute_procedure(
       task,
@@ -291,5 +293,3 @@ function enqueue_derived_task(new_task: Task, parent_a: Task, parent_b: Task | u
         path: new_path,
     };
 }
-
-console.log("Worker script loaded.");
