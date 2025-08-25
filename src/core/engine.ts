@@ -6,6 +6,7 @@ import { resolveScopeBindings } from './scope';
 import { is_procedure_task, execute_procedure } from './procedure';
 import { TaskType } from './types';
 import { SchemaRegistry } from './schema-registry';
+import { InductionSchema } from './schemas/induction';
 
 export class CognitiveEngine {
   private world_model: WorldModel;
@@ -14,6 +15,7 @@ export class CognitiveEngine {
   private truth_policy: ITruthPolicy;
   private procedure_handlers: Record<string, ProcedureHandler>;
   private schema_registry: SchemaRegistry;
+  private induction_schema?: InductionSchema;
 
   public last_scope_bindings: Record<string, string> | undefined;
   public last_scope_task: Task | undefined;
@@ -24,7 +26,8 @@ export class CognitiveEngine {
     attention_policy: IAttentionPolicy,
     truth_policy: ITruthPolicy,
     procedure_handlers: Record<string, ProcedureHandler>,
-    schema_registry: SchemaRegistry
+    schema_registry: SchemaRegistry,
+    induction_schema?: InductionSchema
   ) {
     this.world_model = world_model;
     this.agenda = agenda;
@@ -32,6 +35,7 @@ export class CognitiveEngine {
     this.truth_policy = truth_policy;
     this.procedure_handlers = procedure_handlers;
     this.schema_registry = schema_registry;
+    this.induction_schema = induction_schema;
   }
 
   public async tick() {
@@ -111,6 +115,14 @@ export class CognitiveEngine {
   private async handle_dual_premise_task(task_a: Task, context: Task[], scope_bindings?: Record<string, string>) {
     for (const task_b of context) {
       await this.apply_dual_premise_schemas(task_a, task_b, scope_bindings);
+
+      // Special handling for InductionSchema
+      if (this.induction_schema && task_a.type === TaskType.BELIEF && task_b.type === TaskType.BELIEF) {
+        const derived = await this.induction_schema.apply(task_a, task_b, this.truth_policy, this.world_model, {});
+        for (const new_task of derived) {
+          this.enqueue_derived_task(new_task, task_a, task_b, this.induction_schema.id, scope_bindings);
+        }
+      }
     }
   }
 

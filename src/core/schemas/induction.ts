@@ -14,14 +14,25 @@ export class InductionSchema implements ICognitiveSchema {
     return "($P $A $B) and ($Q $A $C)";
   }
 
-  private find_common_term(s_expr1: SExpression, s_expr2: SExpression): string | null {
-    if (typeof s_expr1 === 'string' || typeof s_expr2 === 'string') {
-      return null;
+  private get_all_terms(s_expr: SExpression, terms: Set<string>): void {
+    if (typeof s_expr === 'string') {
+        terms.add(s_expr);
+        return;
     }
-    const terms1 = new Set(s_expr1.args.map(s => sExpressionToString(s)));
-    const terms2 = s_expr2.args.map(s => sExpressionToString(s));
+    this.get_all_terms(s_expr.head, terms);
+    for (const arg of s_expr.args) {
+        this.get_all_terms(arg, terms);
+    }
+  }
 
-    for (const term of terms2) {
+  private find_common_term(s_expr1: SExpression, s_expr2: SExpression): string | null {
+    const terms1 = new Set<string>();
+    this.get_all_terms(s_expr1, terms1);
+
+    const terms2 = new Set<string>();
+    this.get_all_terms(s_expr2, terms2);
+
+    for (const term of Array.from(terms2)) {
       if (terms1.has(term)) {
         return term;
       }
@@ -60,9 +71,21 @@ export class InductionSchema implements ICognitiveSchema {
     const common_term = this.find_common_term(s_expr_a, s_expr_b);
 
     if (common_term) {
+      if (typeof s_expr_a !== 'string' && sExpressionToString(s_expr_a.head) === common_term) {
+          return []; // Do not generalize on the predicate
+      }
+      if (typeof s_expr_b !== 'string' && sExpressionToString(s_expr_b.head) === common_term) {
+          return []; // Do not generalize on the predicate
+      }
+
       const variable = "$X";
       const generalized_a = this.generalize(s_expr_a, common_term, variable) as SExpression;
       const generalized_b = this.generalize(s_expr_b, common_term, variable) as SExpression;
+
+      // Avoid creating tautologies like (implies ($X) ($X))
+      if (sExpressionToString(generalized_a) === sExpressionToString(generalized_b)) {
+          return [];
+      }
 
       const implication_content = sExpressionToString({head: 'implies', args: [generalized_a, generalized_b]});
 

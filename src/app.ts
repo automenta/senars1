@@ -60,13 +60,16 @@ export class App {
     const questionGeneratorHandler = new QuestionGeneratorHandler(this, llmHandler);
     this.procedure_handlers[questionGeneratorHandler.name()] = questionGeneratorHandler;
 
+    const inductionSchema = new InductionSchema();
+
     this.engine = new CognitiveEngine(
       this.world_model,
       this.agenda,
       this.attention_policy,
       this.truth_policy,
       this.procedure_handlers,
-      this.schema_registry
+      this.schema_registry,
+      inductionSchema
     );
 
     const deductionSchema = new DeductionSchema();
@@ -75,11 +78,7 @@ export class App {
     const abductionSchema = new AbductionSchema();
     this.schema_registry.register(abductionSchema);
 
-    // The InductionSchema is currently disabled as it causes performance issues
-    // and breaks the e2e test. It needs to be handled as a special case by the
-    // CognitiveEngine rather than being a standard pattern-based schema.
-    // const inductionSchema = new InductionSchema();
-    // this.schema_registry.register(inductionSchema);
+    // The InductionSchema is now handled as a special case by the CognitiveEngine.
 
     const safetyAnalysisSchema = new SafetyAnalysisSchema();
     this.schema_registry.register(safetyAnalysisSchema);
