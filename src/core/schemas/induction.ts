@@ -1,17 +1,12 @@
 import { ICognitiveSchema, ITruthPolicy } from '../interfaces';
 import { Task, SemanticAtom } from '../models';
-import { UUID, TaskType } from '../types';
 import { parseSExpression, sExpressionToString, SExpression } from '../s-expression';
-import { substituteInContent } from '../scope';
 import { WorldModel } from '../world-model';
-import { v4 as uuidv4 } from 'uuid';
-
-function generate_uuid(prefix: string = ''): UUID {
-  return `${prefix}-${uuidv4()}`;
-}
+import { generateUUID, createDerivedTask } from './utils';
+import { UUID } from '../types';
 
 export class InductionSchema implements ICognitiveSchema {
-  public readonly id: UUID = generate_uuid("induction_schema");
+  public readonly id: UUID = generateUUID("induction_schema");
 
   get_trigger_pattern(): string {
     // This schema is more general and doesn't have a fixed trigger pattern in the same way as deduction or abduction.
@@ -49,7 +44,9 @@ export class InductionSchema implements ICognitiveSchema {
     task_a: Task,
     task_b: Task | undefined,
     truth_policy: ITruthPolicy,
-    world_model: WorldModel
+    world_model: WorldModel,
+    // bindings are not used in induction, but are part of the interface
+    bindings: Record<string, string>
   ): Promise<Task[]> {
     if (!task_b) {
       return [];
@@ -70,24 +67,20 @@ export class InductionSchema implements ICognitiveSchema {
       const implication_content = sExpressionToString({head: 'implies', args: [generalized_a, generalized_b]});
 
       const derivedAtom: SemanticAtom = {
-        id: generate_uuid(),
+        id: generateUUID('atom'),
         content: implication_content,
         embedding: [],
       };
       await world_model.add_atom(derivedAtom);
 
-      const derivedTask: Task = {
-        id: generate_uuid(),
+      const derivedTask = createDerivedTask({
         atom_id: derivedAtom.id,
-        type: TaskType.BELIEF,
         truth: truth_policy.derivation(task_a, task_b, this.id),
         attention: { priority: 0.5, durability: 0.5 }, // Inductions are less certain
-        stamp: {
-          timestamp: Date.now() / 1000,
-          parent_ids: [task_a.id, task_b.id],
-          schema_id: this.id,
-        },
-      };
+        parent_ids: [task_a.id, task_b.id],
+        schema_id: this.id,
+      });
+
       return [derivedTask];
     }
 
@@ -99,13 +92,11 @@ export class InductionSchema implements ICognitiveSchema {
     task_b: Task | undefined,
     truth_policy: ITruthPolicy,
     scope_bindings: Record<string, string>,
-    world_model: WorldModel
+    world_model: WorldModel,
+    bindings: Record<string, string>
   ): Promise<Task[]> {
-    if (!task_b) {
-      return [];
-    }
-    // Induction doesn't typically work with pre-defined scope bindings in this context.
+    // Induction doesn't typically work with pre-defined scope bindings or pattern bindings in this context.
     // We are generating a new general rule, not applying a scoped one.
-    return await this.apply(task_a, task_b, truth_policy, world_model);
+    return await this.apply(task_a, task_b, truth_policy, world_model, bindings);
   }
 }

@@ -33,7 +33,7 @@ export interface ICognitiveSchema {
     truth_policy: ITruthPolicy,
     world_model: WorldModel,
     bindings: Record<string, string>
-  ): Task[];
+  ): Promise<Task[]>;
 
   apply_with_bindings(
     task_a: Task,
@@ -42,7 +42,7 @@ export interface ICognitiveSchema {
     scope_bindings: Record<string, string>,
     world_model: WorldModel,
     bindings: Record<string, string>
-  ): Task[];
+  ): Promise<Task[]>;
 }
 
 export interface ProcedureHandler {
