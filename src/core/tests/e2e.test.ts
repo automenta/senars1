@@ -7,7 +7,9 @@ import { ICognitiveSchema, ITruthPolicy, ProcedureHandler } from '../interfaces'
 import { WorldModel } from '../world-model';
 import { v4 as uuidv4 } from 'uuid';
 import * as utils from '../utils';
+import { SafetyConclusionSchema } from '../schemas/safety_conclusion';
 
+// Mock LLM Handler to simulate LLM calls without actual API requests
 class MockLLMHandler implements ProcedureHandler {
     async execute(content: string, bindings: Record<string, string>, world_model: WorldModel): Promise<Task[]> {
         let query = this.extract_param(content, 'query');
@@ -18,7 +20,7 @@ class MockLLMHandler implements ProcedureHandler {
             query = query.replace(placeholder, bindings[key]);
         }
 
-        if (query === 'is chocolate toxic to cat?') {
+        if (query === 'is_toxic chocolate cat?') {
             const atom = {
                 id: uuidv4(),
                 content: '(is_toxic chocolate cat)',
@@ -45,61 +47,19 @@ class MockLLMHandler implements ProcedureHandler {
     }
 }
 
-class SafetyAnalysisSchema implements ICognitiveSchema {
-    id: UUID = 'safety_schema';
-    get_trigger_pattern() {
-        return ['(eats $animal $substance)', '(is_safe_for $animal $substance)'];
-    }
-    apply(task_a: Task, task_b: Task, truth_policy: ITruthPolicy, world_model: WorldModel, bindings: Record<string, string>): Task[] {
-        const scope_content = `{(%substance=${bindings['$substance']}, %animal=${bindings['$animal']}), (GOAL (execute "llm" query:"is %substance toxic to %animal?"))}`;
-        const atom = { id: uuidv4(), content: scope_content, embedding: [0.1, 0.9, 0.2] };
-        world_model.add_atom(atom);
-        return [{
-            id: uuidv4(),
-            atom_id: atom.id,
-            type: TaskType.GOAL,
-            attention: { priority: 0.9, durability: 0.9 },
-            stamp: { timestamp: Date.now() / 1000, parent_ids: [task_a.id, task_b.id], schema_id: this.id },
-        }];
-    }
-    apply_with_bindings(task_a: Task, task_b: Task, truth_policy: ITruthPolicy, scope_bindings: Record<string, string>, world_model: WorldModel, bindings: Record<string, string>): Task[] {
-        return this.apply(task_a, task_b, truth_policy, world_model, bindings);
-     }
-}
-
-class SafetyConclusionSchema implements ICognitiveSchema {
-    id: UUID = 'safety_conclusion';
-    get_trigger_pattern() {
-        return ['(is_toxic $substance $animal)', '(eats $animal $substance)'];
-    }
-    apply(task_a: Task, task_b: Task, truth_policy: ITruthPolicy, world_model: WorldModel, bindings: Record<string, string>): Task[] {
-        const alert_content = `(send_alert user "Cat is in danger from chocolate!")`;
-        const atom = { id: uuidv4(), content: alert_content, embedding: [0.9, 0.1, 0.1] };
-        world_model.add_atom(atom);
-        return [{
-            id: uuidv4(),
-            atom_id: atom.id,
-            type: TaskType.GOAL,
-            attention: { priority: 0.95, durability: 0.9 },
-            stamp: { timestamp: Date.now() / 1000, parent_ids: [task_a.id, task_b.id], schema_id: this.id },
-        }];
-    }
-    apply_with_bindings(task_a: Task, task_b: Task, truth_policy: ITruthPolicy, scope_bindings: Record<string, string>, world_model: WorldModel, bindings: Record<string, string>): Task[] {
-        return this.apply(task_a, task_b, truth_policy, world_model, bindings);
-    }
-}
-
-
 describe('SeNARS End-to-End Test', () => {
   let app: App;
   let guiManager: GuiManager;
 
   beforeEach(async () => {
+    // Create a new app instance without seed data for a clean test environment
     app = await App.create(false);
     guiManager = new GuiManager(app);
-    app.schema_registry.register(new SafetyAnalysisSchema());
-    app.schema_registry.register(new SafetyConclusionSchema());
-    (app as any).procedure_handlers['llm'] = new MockLLMHandler();
+
+    // The real SafetyAnalysisSchema and QuestionAnsweringSchema are registered by default in App.
+    // We only need to register the final schema for creating the alert and mock the LLM handler.
+    app.register_schema(new SafetyConclusionSchema());
+    app.register_procedure_handler(new MockLLMHandler());
   });
 
   it('should run the "Complete Worked Example" from core.md successfully', async () => {
@@ -109,12 +69,13 @@ describe('SeNARS End-to-End Test', () => {
     await guiManager.add_new_thought('(eats cat chocolate)', TaskType.BELIEF);
     await guiManager.add_new_thought('(is_safe_for cat chocolate)', TaskType.GOAL);
 
-    // 4 ticks are required to complete the reasoning chain.
-    // 1. Process (eats...)
-    // 2. Process (is_safe...) -> creates procedure
-    // 3. Process procedure -> creates (is_toxic...)
-    // 4. Process (is_toxic...) -> creates alert
-    for (let i = 0; i < 4; i++) {
+    // More ticks are needed for the multi-step reasoning process:
+    // 1. (eats) + (is_safe_for) -> SafetyAnalysisSchema -> (is_toxic)? [QUESTION]
+    // 2. (is_toxic)? -> QuestionAnsweringSchema -> (execute llm) [PROCEDURE]
+    // 3. (execute llm) -> MockLLMHandler -> (is_toxic) [BELIEF]
+    // 4. (is_toxic) + (eats) -> SafetyConclusionSchema -> (send_alert) [GOAL]
+    // 5. One extra tick for safety.
+    for (let i = 0; i < 5; i++) {
         await app.tick();
     }
 
