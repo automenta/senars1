@@ -122,7 +122,7 @@ describe('Scope Parsing and Resolution', () => {
       expect(bindings).toEqual({ '%item': 'car', '%color': 'blue' });
     });
 
-    it('should resolve bindings from a nested sub-expression in a context task', async () => {
+    it('should NOT resolve bindings from a nested sub-expression if the top-level structure does not match', async () => {
         const scopeAtom: SemanticAtom = {
           id: uuidv4(),
           content: '{(%substance, %animal), (is_toxic %substance %animal)}',
@@ -145,8 +145,10 @@ describe('Scope Parsing and Resolution', () => {
             attention: { priority: 1, durability: 1 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' }
         };
 
+        // The new, correct implementation should not match a sub-expression.
+        // Since the variables are required, the binding should fail.
         const bindings = await resolveScopeBindings(scopeTask, [contextTask], worldModel);
-        expect(bindings).toEqual({ '%substance': 'chocolate', '%animal': 'cat' });
+        expect(bindings).toBeUndefined();
       });
 
     it('should bind a variable only once and not overwrite it', async () => {

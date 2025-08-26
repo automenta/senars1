@@ -47,49 +47,13 @@ export function parseScopeExpression(content: string): ParsedScope {
     return { variables, bodies };
 }
 
-/**
- * Recursively searches for a sub-expression within `contentSExpr` that matches `patternSExpr`.
- * If a match is found, it populates the bindings and returns true.
- * @param patternSExpr The S-Expression pattern to search for.
- * @param contentSExpr The S-Expression to search within.
- * @param bindings A record to store variable bindings.
- * @returns True if a match is found anywhere in the content, false otherwise.
- */
-function findAndMatchPattern(
-    patternSExpr: SExpression,
-    contentSExpr: SExpression,
-    bindings: Record<string, string>
-): boolean {
-    // Try to match at the current level
-    const temp_bindings: Record<string, string> = {};
-    if (matchSExpressionPattern(patternSExpr, contentSExpr, temp_bindings)) {
-        // Match found, merge bindings
-        Object.assign(bindings, temp_bindings);
-        return true;
-    }
-
-    // If no match at this level, recurse into the arguments of the content S-Expression
-    if (Array.isArray(contentSExpr.args)) {
-        for (const arg of contentSExpr.args) {
-            if (typeof arg !== 'string') { // Only recurse into sub-expressions
-                if (findAndMatchPattern(patternSExpr, arg, bindings)) {
-                    return true; // Match found in a sub-expression
-                }
-            }
-        }
-    }
-
-    return false; // No match found in this branch
-}
-
-
-export function resolveScopeBindings(
+export async function resolveScopeBindings(
     scope_task: Task,
     context_tasks: Task[],
     world_model: WorldModel
-  ): Record<string, string> | undefined {
+  ): Promise<Record<string, string> | undefined> {
     const scope_atom = world_model.get_atom(scope_task.atom_id);
-    if (!scope_atom.content.startsWith('{')) {
+    if (!scope_atom || !scope_atom.content.startsWith('{')) {
       return undefined; // Not a scope task
     }
 
@@ -98,62 +62,60 @@ export function resolveScopeBindings(
       const bindings: Record<string, string> = {};
       const required_vars = new Set<string>();
 
-      // 1. Initialize bindings with default values from the variable definitions
+      // Collect required variables
       for (const var_def of parsed_scope.variables) {
         if (var_def.required) {
           required_vars.add(var_def.name);
         }
-        if (var_def.default !== undefined) {
-          bindings[var_def.name] = String(var_def.default);
-        }
       }
 
-      // 2. For each variable, try to find a binding if it's not already bound by a default.
-      variable_loop: for (const var_def of parsed_scope.variables) {
-        if (bindings[var_def.name]) {
-          continue; // Already bound (e.g., by a default value)
-        }
+      // 1. Iterate through body patterns and context tasks to find bindings from context
+      for (const body_pattern_str of parsed_scope.bodies) {
+        if (!body_pattern_str.startsWith('(')) continue;
 
-        // Search for a binding for this specific variable
-        for (const body_pattern_str of parsed_scope.bodies) {
-          if (!body_pattern_str.includes(var_def.name)) {
-            continue; // This pattern doesn't involve the variable we're trying to bind.
-          }
-          if (!body_pattern_str.startsWith('(')) continue;
-
+        try {
           const body_pattern_sexpr = parseSExpression(body_pattern_str);
 
           for (const context_task of context_tasks) {
             const context_atom = world_model.get_atom(context_task.atom_id);
-            const context_sexpr = parseSExpression(context_atom.content);
+            if (!context_atom) continue;
 
-            // Create a temporary bindings object for this attempt
-            const temp_bindings: Record<string, string> = {...bindings};
+            try {
+              const context_sexpr = parseSExpression(context_atom.content);
+              const temp_bindings: Record<string, string> = {};
 
-            if (findAndMatchPattern(body_pattern_sexpr, context_sexpr, temp_bindings)) {
-              // A match was found. Check if it gives us the variable we are looking for.
-              if (temp_bindings[var_def.name] && !bindings[var_def.name]) {
-                  // Bind the variable
-                  bindings[var_def.name] = temp_bindings[var_def.name];
-                  // And also accept any other bindings found in this successful match
-                  Object.assign(bindings, temp_bindings);
-                  // Once the variable is bound, continue to the next variable.
-                  continue variable_loop;
+              if (matchSExpressionPattern(body_pattern_sexpr, context_sexpr, temp_bindings)) {
+                // Merge bindings, respecting already-bound variables from context
+                for (const key in temp_bindings) {
+                  if (!bindings.hasOwnProperty(key)) {
+                    bindings[key] = temp_bindings[key];
+                  }
+                }
               }
+            } catch (e) {
+              // Ignore invalid S-Expressions in context
             }
           }
+        } catch (e) {
+          // Ignore invalid S-Expressions in patterns
+        }
+      }
+
+      // 2. Apply default values for any variables that were not bound from context
+      for (const var_def of parsed_scope.variables) {
+        if (var_def.default !== undefined && !bindings.hasOwnProperty(var_def.name)) {
+          bindings[var_def.name] = String(var_def.default);
         }
       }
 
       // 3. Check if all required variables have been bound
       for (const required_var of required_vars) {
-        if (!bindings[required_var]) {
+        if (!bindings.hasOwnProperty(required_var)) {
           console.warn(`Missing required binding for scope variable: ${required_var}`);
-          return undefined; // A required binding is missing, so resolution fails
+          return undefined;
         }
       }
 
-      // Return bindings, even if they only contain default values.
       return bindings;
 
     } catch (e) {
