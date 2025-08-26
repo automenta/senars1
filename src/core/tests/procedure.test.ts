@@ -5,9 +5,10 @@ import { ProcedureHandler } from '../interfaces';
 import { SemanticAtom, Task } from '../models';
 import { TaskType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { MockResonanceStrategy, MockTruthPolicy } from './world-model.test';
+import { MockResonanceStrategy, MockTruthPolicy } from './mocks';
 import { InMemoryPatternMatcher } from '../implementations';
 import { SchemaRegistry } from '../schema-registry';
+import { EventBus } from '../../gui/EventBus';
 
 class MockSuccessHandler implements ProcedureHandler {
   name = () => 'success';
@@ -48,9 +49,10 @@ describe('Procedure Framework', () => {
   beforeEach(() => {
     const resonanceStrategy = new MockResonanceStrategy();
     const truthPolicy = new MockTruthPolicy();
-    const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
-    const mockApp = { emit: vi.fn() };
-    worldModel = new WorldModel(mockApp as any, resonanceStrategy, truthPolicy, schemaRegistry, new InMemoryPatternMatcher());
+    const patternMatcher = new InMemoryPatternMatcher();
+    const schemaRegistry = new SchemaRegistry(patternMatcher);
+    const eventBus = new EventBus();
+    worldModel = new WorldModel(eventBus, resonanceStrategy, truthPolicy, schemaRegistry, patternMatcher);
     handlers = {
       'success': new MockSuccessHandler(),
       'failure': new MockFailureHandler(),

@@ -4,26 +4,25 @@ import { InductionSchema } from '../schemas/induction';
 import { Task, SemanticAtom } from '../models';
 import { TaskType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { MockTruthPolicy, MockResonanceStrategy } from './world-model.test';
+import { MockTruthPolicy, MockResonanceStrategy } from './mocks';
 import { WorldModel } from '../world-model';
 import { InMemoryPatternMatcher } from '../implementations';
 import { SchemaRegistry } from '../schema-registry';
+import { EventBus } from '../../gui/EventBus';
 
 describe('AbductionSchema', () => {
   let abductionSchema: AbductionSchema;
   let mockTruthPolicy: MockTruthPolicy;
   let worldModel: WorldModel;
-  const mockApp = {
-    emit: vi.fn(),
-  };
 
   beforeEach(() => {
+    const eventBus = new EventBus();
     abductionSchema = new AbductionSchema();
     mockTruthPolicy = new MockTruthPolicy();
     const resonanceStrategy = new MockResonanceStrategy();
-    const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
-    worldModel = new WorldModel(mockApp as any, resonanceStrategy, mockTruthPolicy, schemaRegistry, new InMemoryPatternMatcher());
-    mockApp.emit.mockClear();
+    const patternMatcher = new InMemoryPatternMatcher();
+    const schemaRegistry = new SchemaRegistry(patternMatcher);
+    worldModel = new WorldModel(eventBus, resonanceStrategy, mockTruthPolicy, schemaRegistry, patternMatcher);
   });
 
   it('should derive the premise from an implication and a conclusion', async () => {
@@ -48,17 +47,15 @@ describe('InductionSchema', () => {
   let inductionSchema: InductionSchema;
   let mockTruthPolicy: MockTruthPolicy;
   let worldModel: WorldModel;
-  const mockApp = {
-    emit: vi.fn(),
-  };
 
   beforeEach(() => {
+    const eventBus = new EventBus();
     inductionSchema = new InductionSchema();
     mockTruthPolicy = new MockTruthPolicy();
     const resonanceStrategy = new MockResonanceStrategy();
-    const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
-    worldModel = new WorldModel(mockApp as any, resonanceStrategy, mockTruthPolicy, schemaRegistry);
-    mockApp.emit.mockClear();
+    const patternMatcher = new InMemoryPatternMatcher();
+    const schemaRegistry = new SchemaRegistry(patternMatcher);
+    worldModel = new WorldModel(eventBus, resonanceStrategy, mockTruthPolicy, schemaRegistry, patternMatcher);
   });
 
   it('should induce an implication from two co-occurring facts', async () => {
@@ -70,7 +67,7 @@ describe('InductionSchema', () => {
     const taskA: Task = { id: uuidv4(), atom_id: fact1Atom.id, type: TaskType.BELIEF, truth: { frequency: 0.8, confidence: 0.7 }, attention: { priority: 0.8, durability: 0.7 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' } };
     const taskB: Task = { id: uuidv4(), atom_id: fact2Atom.id, type: TaskType.BELIEF, truth: { frequency: 0.9, confidence: 0.9 }, attention: { priority: 0.9, durability: 0.9 }, stamp: { timestamp: 0, parent_ids: [], schema_id: '' } };
 
-    const derivedTasks = await inductionSchema.apply(taskA, taskB, mockTruthPolicy, worldModel);
+    const derivedTasks = await inductionSchema.apply(taskA, taskB, mockTruthPolicy, worldModel, {});
 
     expect(derivedTasks.length).toBe(1);
     const derivedAtom = worldModel.get_atom(derivedTasks[0].atom_id);

@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WorldModel } from '../../world-model';
 import { TestAnalysisSchema } from '../../schemas/test_analysis';
-import { MockResonanceStrategy, MockTruthPolicy } from '../world-model.test';
+import { MockResonanceStrategy, MockTruthPolicy } from '../mocks';
 import { InMemoryPatternMatcher } from '../../implementations';
 import { Task, SemanticAtom } from '../../models';
 import { TaskType } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { SchemaRegistry } from '../../schema-registry';
+import { EventBus } from '../../../gui/EventBus';
 
 describe('TestAnalysisSchema', () => {
     let worldModel: WorldModel;
@@ -14,11 +15,12 @@ describe('TestAnalysisSchema', () => {
     let truthPolicy: MockTruthPolicy;
 
     beforeEach(() => {
-        const mockApp = { emit: vi.fn() };
+        const eventBus = new EventBus();
         const resonanceStrategy = new MockResonanceStrategy();
         truthPolicy = new MockTruthPolicy();
-        const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
-        worldModel = new WorldModel(mockApp as any, resonanceStrategy, truthPolicy, schemaRegistry, new InMemoryPatternMatcher());
+        const patternMatcher = new InMemoryPatternMatcher();
+        const schemaRegistry = new SchemaRegistry(patternMatcher);
+        worldModel = new WorldModel(eventBus, resonanceStrategy, truthPolicy, schemaRegistry, patternMatcher);
         schema = new TestAnalysisSchema();
     });
 
@@ -42,7 +44,7 @@ describe('TestAnalysisSchema', () => {
             },
         };
 
-        const new_tasks = await schema.apply(failure_task, failure_task, truthPolicy, worldModel);
+        const new_tasks = await schema.apply(failure_task, undefined, truthPolicy, worldModel, {});
 
         expect(new_tasks.length).toBe(1);
         const task = new_tasks[0];

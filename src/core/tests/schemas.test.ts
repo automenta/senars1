@@ -3,26 +3,26 @@ import { DeductionSchema } from '../schemas';
 import { Task, SemanticAtom, AttentionValue, DerivationStamp, TruthValue } from '../models';
 import { TaskType, UUID } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { MockTruthPolicy, MockResonanceStrategy } from './world-model.test'; // Reusing mocks
+import { MockTruthPolicy, MockResonanceStrategy } from './mocks';
 import { WorldModel } from '../world-model';
 import { InMemoryPatternMatcher } from '../implementations';
 import { SchemaRegistry } from '../schema-registry';
+import { EventBus } from '../../gui/EventBus';
 
 describe('DeductionSchema', () => {
   let deductionSchema: DeductionSchema;
   let mockTruthPolicy: MockTruthPolicy;
   let worldModel: WorldModel;
-  const mockApp = {
-    emit: vi.fn(),
-  };
+  let eventBus: EventBus;
 
   beforeEach(() => {
+    eventBus = new EventBus();
     deductionSchema = new DeductionSchema();
     mockTruthPolicy = new MockTruthPolicy();
     const resonanceStrategy = new MockResonanceStrategy();
-    const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
-    worldModel = new WorldModel(mockApp as any, resonanceStrategy, mockTruthPolicy, schemaRegistry, new InMemoryPatternMatcher());
-    mockApp.emit.mockClear();
+    const patternMatcher = new InMemoryPatternMatcher();
+    const schemaRegistry = new SchemaRegistry(patternMatcher);
+    worldModel = new WorldModel(eventBus, resonanceStrategy, mockTruthPolicy, schemaRegistry, patternMatcher);
   });
 
   it('should return the correct trigger pattern', () => {

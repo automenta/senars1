@@ -6,30 +6,15 @@ import { InMemoryPatternMatcher } from '../implementations';
 import { TaskType, UUID } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { SchemaRegistry } from '../schema-registry';
-
-export class MockResonanceStrategy implements IResonanceStrategy {
-  find_context(focus: Task, world_model: WorldModel, k: number): Task[] {
-    return [];
-  }
-}
-
-export class MockTruthPolicy implements ITruthPolicy {
-  revision(belief_a: Task, belief_b: Task) {
-    return { frequency: 0.6, confidence: 0.6 };
-  }
-  derivation(premise_a: Task, premise_b: Task, schema_id: UUID) {
-    return { frequency: 0.7, confidence: 0.7 };
-  }
-}
+import { EventBus } from '../../gui/EventBus';
+import { MockResonanceStrategy, MockTruthPolicy } from './mocks';
 
 describe('WorldModel', () => {
   let worldModel: WorldModel;
   let resonanceStrategy: IResonanceStrategy;
   let truthPolicy: ITruthPolicy;
   let schemaRegistry: SchemaRegistry;
-  const mockApp = {
-    emit: vi.fn(),
-  };
+  let eventBus: EventBus;
 
   const create_atom = (content: string): SemanticAtom => ({
     id: uuidv4(),
@@ -48,11 +33,12 @@ describe('WorldModel', () => {
   });
 
   beforeEach(() => {
+    eventBus = new EventBus();
     resonanceStrategy = new MockResonanceStrategy();
     truthPolicy = new MockTruthPolicy();
-    schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
-    worldModel = new WorldModel(mockApp as any, resonanceStrategy, truthPolicy, schemaRegistry, new InMemoryPatternMatcher());
-    mockApp.emit.mockClear();
+    const patternMatcher = new InMemoryPatternMatcher();
+    schemaRegistry = new SchemaRegistry(patternMatcher);
+    worldModel = new WorldModel(eventBus, resonanceStrategy, truthPolicy, schemaRegistry, patternMatcher);
   });
 
   it('should add and retrieve an atom', async () => {
@@ -67,9 +53,12 @@ describe('WorldModel', () => {
   });
 
   it('should add and retrieve a task', async () => {
+    const atom: SemanticAtom = { id: uuidv4(), content: 'test', embedding: [] };
+    await worldModel.add_atom(atom);
+
     const task: Task = {
       id: uuidv4(),
-      atom_id: uuidv4(),
+      atom_id: atom.id,
       type: TaskType.GOAL,
       attention: { priority: 0.8, durability: 0.8 },
       stamp: {

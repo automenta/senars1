@@ -14,7 +14,8 @@ export function generateUUID(prefix: string = ''): UUID {
 
 export interface CreateDerivedTaskProps {
   atom_id: UUID;
-  truth: TruthValue;
+  type?: TaskType;
+  truth?: TruthValue;
   attention: AttentionValue;
   parent_ids: UUID[];
   schema_id: UUID;
@@ -23,17 +24,17 @@ export interface CreateDerivedTaskProps {
 
 /**
  * Creates a new derived task object.
- * This utility function standardizes the creation of BELIEF tasks that result from schema application.
+ * This utility function standardizes the creation of derived tasks that result from schema application.
  * @param {CreateDerivedTaskProps} props - The properties for the new task.
  * @returns {Task} The newly created task.
  */
 export function createDerivedTask(props: CreateDerivedTaskProps): Task {
-  const { atom_id, truth, attention, parent_ids, schema_id, scope_bindings } = props;
+  const { atom_id, type, truth, attention, parent_ids, schema_id, scope_bindings } = props;
 
   const derivedTask: Task = {
     id: generateUUID('task'),
     atom_id: atom_id,
-    type: TaskType.BELIEF,
+    type: type || TaskType.BELIEF, // Default to BELIEF for backward compatibility
     truth: truth,
     attention: attention,
     stamp: {

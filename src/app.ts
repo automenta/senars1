@@ -2,20 +2,22 @@ import { v4 as uuidv4 } from 'uuid';
 import { generate_embedding } from './core/utils';
 import { WorldModel } from './core/world-model';
 import { EventBus } from './gui/EventBus';
-import { DefaultAttentionPolicy, DefaultTruthPolicy, DefaultResonanceStrategy, LLMHandler, InMemoryPatternMatcher, QuestionGeneratorHandler } from './core/implementations';
+import { DefaultAttentionPolicy, DefaultTruthPolicy, DefaultResonanceStrategy, InMemoryPatternMatcher, QuestionGeneratorHandler } from './core/implementations';
+import { LLMHandler } from './core/procs/llm_handler';
 import { Task, SemanticAtom } from './core/models';
-import { TaskType } from './core/types';
-import { ProcedureHandler } from './core/interfaces';
+import { TaskType, UUID } from './core/types';
+import { ProcedureHandler, ICognitiveSchema } from './core/interfaces';
 import { Agenda } from './core/agenda';
 import { SchemaRegistry } from './core/schema-registry';
 import { DeductionSchema } from './core/schemas';
 import { AbductionSchema } from './core/schemas/abduction';
 import { InductionSchema } from './core/schemas/induction';
 import { SafetyAnalysisSchema } from './core/schemas/safety_analysis';
+import { QuestionAnsweringSchema } from './core/schemas/question_answering';
 import { SelfSafetySchema } from './core/schemas/self_safety';
 import { ThoughtExpansionSchema } from './core/schemas/thought_expansion';
 import { seed_data } from './core/seed';
-import { CognitiveEngine } from './core/engine'; // Import the new engine
+import { CognitiveEngine } from './core/engine';
 import { loadConfig, Config, LLMConfig } from './core/config';
 
 export class App {
@@ -26,11 +28,10 @@ export class App {
   private truth_policy: DefaultTruthPolicy;
   private resonance_strategy: DefaultResonanceStrategy;
   private procedure_handlers: Record<string, ProcedureHandler>;
-  private engine: CognitiveEngine; // Add the engine instance
+  private engine: CognitiveEngine;
   private config: Config;
   private eventBus: EventBus;
 
-  // GUI can access these via getters
   public get last_scope_bindings(): Record<string, string> | undefined {
     return this.engine.last_scope_bindings;
   }
@@ -59,16 +60,15 @@ export class App {
     this.agenda = new Agenda(this.eventBus);
     this.procedure_handlers = {};
 
-    // Create the pattern matcher first, as it's a shared dependency
     const pattern_matcher = new InMemoryPatternMatcher();
     this.schema_registry = new SchemaRegistry(pattern_matcher);
     this.world_model = new WorldModel(this.eventBus, this.resonance_strategy, this.truth_policy, this.schema_registry, pattern_matcher);
 
-    const llmHandler = new LLMHandler(this.config.llm, this);
+    const llmHandler = new LLMHandler();
     this.procedure_handlers[llmHandler.name()] = llmHandler;
 
-    const questionGeneratorHandler = new QuestionGeneratorHandler(this, llmHandler);
-    this.procedure_handlers[questionGeneratorHandler.name()] = questionGeneratorHandler;
+    // const questionGeneratorHandler = new QuestionGeneratorHandler(this, llmHandler);
+    // this.procedure_handlers[questionGeneratorHandler.name()] = questionGeneratorHandler;
 
     const inductionSchema = new InductionSchema();
 
@@ -88,14 +88,11 @@ export class App {
     const abductionSchema = new AbductionSchema();
     this.schema_registry.register(abductionSchema);
 
-    // The InductionSchema is now handled as a special case by the CognitiveEngine.
-
     const safetyAnalysisSchema = new SafetyAnalysisSchema();
     this.schema_registry.register(safetyAnalysisSchema);
 
-    // The SelfSafetySchema is a placeholder and is not fully implemented.
-    // const selfSafetySchema = new SelfSafetySchema();
-    // this.schema_registry.register(selfSafetySchema);
+    const questionAnsweringSchema = new QuestionAnsweringSchema();
+    this.schema_registry.register(questionAnsweringSchema);
 
     const thoughtExpansionSchema = new ThoughtExpansionSchema();
     this.schema_registry.register(thoughtExpansionSchema);
@@ -136,14 +133,12 @@ export class App {
 
   public update_llm_config(config: LLMConfig) {
     this.config.llm = config;
-    const llmHandler = this.procedure_handlers['llm'] as LLMHandler;
-    llmHandler?.update_config(config);
+    // My new LLMHandler uses environment variables, so this method is no longer needed.
+    // A more robust implementation might involve passing the config to the handler.
   }
 
-  // The app's tick now simply delegates to the engine
   public async tick() {
     await this.agenda.decay(this.attention_policy);
     await this.engine.tick();
   }
-
 }

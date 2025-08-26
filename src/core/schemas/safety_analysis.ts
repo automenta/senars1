@@ -1,92 +1,57 @@
-import { ICognitiveSchema, ITruthPolicy, TriggerPattern } from '../interfaces';
+import { ITruthPolicy, TriggerPattern } from '../interfaces';
 import { Task, SemanticAtom } from '../models';
-import { UUID, TaskType } from '../types';
 import { WorldModel } from '../world-model';
-import { v4 as uuidv4 } from 'uuid';
+import { BaseSchema } from './base_schema';
+import { generateUUID, createDerivedTask } from './utils';
+import { TaskType }from '../types';
 import { generate_embedding } from '../utils';
 
-export class SafetyAnalysisSchema implements ICognitiveSchema {
-  public readonly id: UUID = uuidv4();
-
-  get_trigger_pattern(): TriggerPattern {
-    return ['(eats $animal $substance)', '(is_safe_for $animal $substance)'];
+export class SafetyAnalysisSchema extends BaseSchema {
+  constructor() {
+    super('safety_analysis_schema');
   }
 
-  private async _derive(
-    task_a: Task,
-    task_b: Task,
+  get_trigger_pattern(): TriggerPattern {
+    // Triggers when there's a belief someone ate something, and a goal to check if it's safe.
+    return ["(eats $animal $substance)", "(is_safe_for $animal $substance)"];
+  }
+
+  protected async _derive(
+    belief_task: Task, // (eats cat chocolate)
+    goal_task: Task,   // (is_safe_for cat chocolate)
     truth_policy: ITruthPolicy,
     world_model: WorldModel,
     bindings: Record<string, string>,
     scope_bindings?: Record<string, string>
   ): Promise<Task[]> {
-    const animal = bindings['$animal'];
     const substance = bindings['$substance'];
+    const animal = bindings['$animal'];
 
-    if (!animal || !substance) {
-      console.error('SafetyAnalysisSchema: Missing $animal or $substance binding.');
+    if (!substance || !animal) {
       return [];
     }
 
-    const scope_content = `{(%sub=${substance}, %anim=${animal}), (QUESTION "(is_toxic %sub %anim)?"), (GOAL (execute "llm" query:"is %sub toxic to %anim?"))}`;
+    const derivedContent = `(is_toxic ${substance} ${animal})`;
 
-    const scope_atom: SemanticAtom = {
-      id: uuidv4(),
-      content: scope_content,
-      embedding: generate_embedding(scope_content),
+    // Note: In a more advanced implementation, the engine or agenda would handle
+    // deduplication of tasks to avoid asking the same question multiple times.
+    // For now, we assume this check happens elsewhere or is not critical.
+
+    const derivedAtom: SemanticAtom = {
+      id: generateUUID('atom'),
+      content: derivedContent,
+      embedding: generate_embedding(derivedContent),
     };
-    await world_model.add_atom(scope_atom);
+    await world_model.add_atom(derivedAtom);
 
-    const scope_task: Task = {
-      id: uuidv4(),
-      atom_id: scope_atom.id,
-      type: TaskType.GOAL,
-      attention: { priority: 0.9, durability: 0.9 },
-      stamp: {
-        timestamp: Date.now() / 1000,
-        parent_ids: [task_a.id, task_b.id],
-        schema_id: this.id,
-        scope_bindings: scope_bindings,
-      },
-    };
+    const derivedTask = createDerivedTask({
+      atom_id: derivedAtom.id,
+      type: TaskType.QUESTION, // This schema generates a QUESTION
+      attention: { priority: 0.95, durability: 0.9 }, // High priority question
+      parent_ids: [belief_task.id, goal_task.id],
+      schema_id: this.id,
+    });
 
-    return [scope_task];
-  }
-
-  async apply(
-    task_a: Task,
-    task_b: Task | undefined,
-    truth_policy: ITruthPolicy,
-    world_model: WorldModel,
-    bindings: Record<string, string>
-  ): Promise<Task[]> {
-    if (!task_b) {
-      return [];
-    }
-    try {
-      return await this._derive(task_a, task_b, truth_policy, world_model, bindings);
-    } catch (e) {
-      console.error("Error in SafetyAnalysisSchema.apply:", e);
-      return [];
-    }
-  }
-
-  async apply_with_bindings(
-    task_a: Task,
-    task_b: Task | undefined,
-    truth_policy: ITruthPolicy,
-    scope_bindings: Record<string, string>,
-    world_model: WorldModel,
-    bindings: Record<string, string>
-  ): Promise<Task[]> {
-    if (!task_b) {
-      return [];
-    }
-    try {
-      return await this._derive(task_a, task_b, truth_policy, world_model, bindings, scope_bindings);
-    } catch (e) {
-      console.error("Error in SafetyAnalysisSchema.apply_with_bindings:", e);
-      return [];
-    }
+    return [derivedTask];
   }
 }

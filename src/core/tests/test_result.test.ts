@@ -1,23 +1,25 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WorldModel } from '../world-model';
 import { TestResultProcedure } from '../procs/test_result';
-import { MockResonanceStrategy, MockTruthPolicy } from './world-model.test';
+import { MockResonanceStrategy, MockTruthPolicy } from './mocks';
 import { InMemoryPatternMatcher } from '../implementations';
 import { Task, SemanticAtom } from '../models';
 import { TaskType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { SchemaRegistry } from '../schema-registry';
+import { EventBus } from '../../gui/EventBus';
 
 describe('TestResultProcedure', () => {
     let worldModel: WorldModel;
     let procedure: TestResultProcedure;
 
     beforeEach(() => {
-        const mockApp = { emit: vi.fn() };
+        const eventBus = new EventBus();
         const resonanceStrategy = new MockResonanceStrategy();
         const truthPolicy = new MockTruthPolicy();
-        const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
-        worldModel = new WorldModel(mockApp as any, resonanceStrategy, truthPolicy, schemaRegistry, new InMemoryPatternMatcher());
+        const patternMatcher = new InMemoryPatternMatcher();
+        const schemaRegistry = new SchemaRegistry(patternMatcher);
+        worldModel = new WorldModel(eventBus, resonanceStrategy, truthPolicy, schemaRegistry, patternMatcher);
         procedure = new TestResultProcedure();
     });
 

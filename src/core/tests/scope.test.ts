@@ -4,24 +4,24 @@ import { Task, SemanticAtom, AttentionValue, DerivationStamp } from '../models';
 import { WorldModel } from '../world-model';
 import { TaskType, UUID } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { MockResonanceStrategy, MockTruthPolicy } from './world-model.test';
+import { MockResonanceStrategy, MockTruthPolicy } from './mocks';
 import { InMemoryPatternMatcher } from '../implementations';
 import { SchemaRegistry } from '../schema-registry';
+import { EventBus } from '../../gui/EventBus';
 
 describe('Scope Parsing and Resolution', () => {
   let worldModel: WorldModel;
   let mockTruthPolicy: MockTruthPolicy;
   let mockResonanceStrategy: MockResonanceStrategy;
-  const mockApp = {
-    emit: vi.fn(),
-  };
+  let eventBus: EventBus;
 
   beforeEach(() => {
+    eventBus = new EventBus();
     mockResonanceStrategy = new MockResonanceStrategy();
     mockTruthPolicy = new MockTruthPolicy();
-    const schemaRegistry = new SchemaRegistry(new InMemoryPatternMatcher());
-    worldModel = new WorldModel(mockApp as any, mockResonanceStrategy, mockTruthPolicy, schemaRegistry, new InMemoryPatternMatcher());
-    mockApp.emit.mockClear();
+    const patternMatcher = new InMemoryPatternMatcher();
+    const schemaRegistry = new SchemaRegistry(patternMatcher);
+    worldModel = new WorldModel(eventBus, mockResonanceStrategy, mockTruthPolicy, schemaRegistry, patternMatcher);
   });
 
   describe('parseScopeVariables', () => {
